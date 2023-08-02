@@ -40,5 +40,26 @@ class UserMedia:
         }
     )
         
-    
-   
+class UserByScreenName:
+    api = 'https://twitter.com/i/api/graphql/xc8f1g7BYqr6VTzTbvNlGw/UserByScreenName'
+
+    params = dict(
+        variables = {
+            "screen_name":"",
+            "withSafetyModeUserFields":True
+        },
+        features = {
+            "hidden_profile_likes_enabled": False,
+            "hidden_profile_subscriptions_enabled": False,
+            "responsive_web_graphql_exclude_directive_enabled": True,
+            "verified_phone_label_enabled": False,
+            "subscriptions_verification_info_verified_since_enabled": True,
+            "highlights_tweets_tab_ui_enabled": True,
+            "creator_subscriptions_tweet_preview_api_enabled": True,
+            "responsive_web_graphql_skip_user_profile_image_extensions_enabled": False,
+            "responsive_web_graphql_timeline_navigation_enabled": True
+        },
+        fieldToggles = {
+            "withAuxiliaryUserLabels":False
+        }
+    )
