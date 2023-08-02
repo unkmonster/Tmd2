@@ -25,7 +25,8 @@ def get_bitrate(variant) -> int:
     return bit
 
 class TwitterUser:
-    def __init__(self, screen_name: str, name = None, rest_id = None) -> None:       
+    def __init__(self, screen_name: str, relative_path = '', name = None, rest_id = None) -> None:       
+        # Get 'name' and 'rest_id'
         if name or rest_id == None:
             UserByScreenName.params['variables']['screen_name'] = screen_name
             params = {k: json.dumps(v) for k, v in UserByScreenName.params.items()}
@@ -39,7 +40,7 @@ class TwitterUser:
         self.name = name
         self.rest_id = rest_id
         self.title = f'{pattern.nonsupport.sub("", self.name)}({self.screen_name})'
-        self.path = core.path + f'\\{self.title}'
+        self.path = core.path + f'\\{relative_path}\\{self.title}'
         
         if not self.is_exist():
             self.create_profile()

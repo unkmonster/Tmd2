@@ -14,7 +14,12 @@ def download(url: str, overwrite: bool, *, path = '.', name = None, change_suffi
     if not overwrite:
         # 处理重复文件  
         count = 1
-        pre, suf = name.split('.')
+        i = name.rfind('.')
+        if i != -1:
+            pre, suf = name[:i], name[i+1:]
+        else:
+            pre, suf = name, '\b'
+
         while os.path.exists(path + f'\\{name}'):
             name = pre + '_' + str(count) + '.' + suf
             count = count + 1
