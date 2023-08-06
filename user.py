@@ -93,17 +93,17 @@ class TwitterUser:
                             legacy = content['itemContent']['tweet_results']['result']['legacy']
                         else:
                             legacy = content['itemContent']['tweet_results']['result']['tweet']['legacy'] 
-                        # TODO 利用推文ID判断此推文本地是否已存在
-                        if legacy['id_str'] in tlist:
-                            continue
-
+                       
                         title = handle_title(legacy['full_text'])
                         print(title)
                        
                         # 遍历推文媒体并下载
                         medias = legacy.get('extended_entities')['media']
-                        try:
-                            for m in medias:
+                        for m in medias:
+                            # 利用媒体ID判断此媒体本地是否已存在
+                            if m['id_str'] in tlist:
+                                continue
+                            try:
                                 if m['type'] == 'photo':
                                     utility.download(m['media_url_https'], False, path=self.path, name=title)
                                 elif m['type'] == 'video':
@@ -113,14 +113,15 @@ class TwitterUser:
                                 else:
                                     # TODO 
                                     print(m['type'])
-                        except:
-                            raise
-                        else:
-                            tlist.append(legacy['id_str'] + '\n')
+                            except:
+                                raise
+                            else:
+                                tlist.append(m['id_str'])
                        
                     elif content['entryType'] == 'TimelineTimelineCursor':
                         if content['cursorType'] == 'Bottom':   # 翻页
                             entries = self.get_timeline(cursor=content['value'])
         finally:
-            with open(self.path + f'\\.{self.rest_id}', 'w') as f:  
-                f.writelines(tlist)  
+            with open(self.path + f'\\.{self.rest_id}', 'w') as f: 
+                for id in tlist:
+                    f.write(id + '\n')
