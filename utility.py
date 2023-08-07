@@ -3,13 +3,14 @@ import requests
 import time
 
 def download(url: str, overwrite: bool, *, path = '.', name = None, change_suffix = False):
-    try:
-        res = requests.get(url, stream=True)
-    except (requests.exceptions.ProxyError, requests.exceptions.SSLError) as err:
-        print(err)
-        print('Attempt to retry...')
-        time.sleep(10)
-        res = requests.get(url, stream=True)
+    for i in range(10):
+        try:
+            res = requests.get(url, stream=True)
+        except (requests.exceptions.ProxyError, requests.exceptions.SSLError) as err:
+            print(f'[{i+1}][{err}] Attempt to retry...')
+            time.sleep(10)
+        else:
+            break
     res.raise_for_status()
 
     origin = get_filename_from_path(url)
