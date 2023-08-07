@@ -2,23 +2,24 @@ import json
 import core
 import os
 
-users = dict()
+j_lists = dict()
 
 def init():
     if not os.path.exists(core.path):
         os.mkdir(core.path)
     
-    if not os.path.exists(core.path + '\\.users.json'):
-        with open(core.path + '\\.users.json', 'w', encoding='utf-8') as f:
+    # TODO
+    if not os.path.exists(core.path + '\\.lists.json'):
+        with open(core.path + '\\.lists.json', 'w', encoding='utf-8') as f:
             json.dump(dict(), f)
             pass
     
-    # 读取已存在用户列表
-    with open(core.path + '\\.users.json', 'r', encoding='utf-8') as f:
-        global users
-        users = json.load(f)
+    # 读取已存在'列表'
+    with open(core.path + '\\.lists.json', 'r', encoding='utf-8') as f:
+        global j_lists
+        j_lists = json.load(f)
         pass
 
 def uninit():
-    with open(core.path + '\\.users.json', 'w', encoding='utf-8') as f:
-        json.dump(users, f, ensure_ascii=False, indent=4, separators=(',', ': '))
+    with open(core.path + '\\.lists.json', 'w', encoding='utf-8') as f:
+        json.dump(j_lists, f, ensure_ascii=False, indent=4, separators=(',', ': '))

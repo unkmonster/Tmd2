@@ -5,9 +5,11 @@ import json
 import pattern
 import core
 import os
-import saving
 import pattern
 import utility
+import tlist
+import requests
+import time
 
 def handle_title(full_text: str) -> str:
     full_text = pattern.url.sub('', full_text)
@@ -27,7 +29,7 @@ def get_bitrate(variant) -> int:
 class TwitterUser:
     def __init__(self, screen_name: str, relative_path = '', name = None, rest_id = None) -> None:       
         # Get 'name' and 'rest_id'
-        if name or rest_id == None:
+        if (name or rest_id) == None:
             UserByScreenName.params['variables']['screen_name'] = screen_name
             params = {k: json.dumps(v) for k, v in UserByScreenName.params.items()}
             res = ses.get(UserByScreenName.api, params=params)
@@ -44,22 +46,35 @@ class TwitterUser:
         
         if not self.is_exist():
             self.create_profile()
+        else:
+            self.update_info()
             #os.mkdir(core.path + '\\')
         pass
     
+    def update_info(self):
+        # 用户已更改用户名
+        if self.title != tlist.users[self.rest_id]:
+            i = self.path.rfind('\\')
+            os.rename(self.path[:i] + f'\\{tlist.users[self.rest_id]}', self.path)
+            tlist.users[self.rest_id] = self.title
+        pass
+
     def is_exist(self) -> bool:
         # TODO
-        if self.rest_id in saving.users:          
+        if self.rest_id in tlist.users:          
             return True
         else:
             return False
     
     def create_profile(self):
-        saving.users[self.rest_id] = self.title
+        tlist.users[self.rest_id] = self.title
 
-        os.mkdir(self.path)
-        with open(self.path + f'\\.{self.rest_id}', 'w'):
-            pass
+        if not os.path.exists(self.path):
+            os.mkdir(self.path)
+        
+        if not os.path.exists(self.path + f'\\.{self.rest_id}'):          
+            with open(self.path + f'\\.{self.rest_id}', 'w'):
+                pass
 
     def get_timeline(self, count=50, cursor="") -> list:
         """Return tweetlist of the user.
@@ -72,8 +87,14 @@ class TwitterUser:
         params = {k: json.dumps(v) for k, v in UserMedia.params.items()}
         
         res = ses.get(UserMedia.api, params=params)
-        res.raise_for_status()
 
+        if res.status_code == requests.codes.TOO_MANY:
+            waiting = res.headers['x-rate-limit-reset'] - time.time()
+            print('waiting with', waiting)
+            time.sleep(waiting)
+        
+        if res.json()['data']['user']['result']['__typename'] == 'UserUnavailable':
+            return list()
         return res.json()['data']['user']['result']['timeline_v2']['timeline']['instructions'][0]['entries']
 
     def download_all(self):
@@ -90,6 +111,9 @@ class TwitterUser:
                     content = entry['content']
                     
                     if content['entryType'] == 'TimelineTimelineItem':
+                        if 'result' not in content['itemContent']['tweet_results']:
+                            continue
+
                         if 'legacy' in content['itemContent']['tweet_results']['result']:
                             legacy = content['itemContent']['tweet_results']['result']['legacy']
                         else:
@@ -99,7 +123,12 @@ class TwitterUser:
                         print(title)
                        
                         # 遍历推文媒体并下载
-                        medias = legacy.get('extended_entities')['media']
+                        medias = legacy.get('extended_entities')
+                        if medias == None:
+                            continue
+                        else:
+                            medias = medias['media']
+
                         for m in medias:
                             # 利用媒体ID判断此媒体本地是否已存在
                             if m['id_str'] in tlist:
@@ -109,11 +138,21 @@ class TwitterUser:
                                     utility.download(m['media_url_https'], False, path=self.path, name=title)
                                 elif m['type'] == 'video':
                                     variants = list(m['video_info']['variants'])
-                                    variants.sort(key=get_bitrate)                                  
-                                    utility.download(variants[-1]['url'], False, path=self.path, name=title)
+                                    variants.sort(key=get_bitrate) 
+                                    while len(variants):
+                                        try:    
+                                            url = variants.pop()['url']                            
+                                            utility.download(url, False, path=self.path, name=title)
+                                        except requests.HTTPError as err:
+                                            if err.response.status_code == requests.codes.NOT_FOUND:                                    
+                                                continue
+                                        else:
+                                            break
+                                    else:
+                                        raise RuntimeError('Media Not Found')
                                 else:
-                                    # TODO 
-                                    print(m['type'])
+                                    # TODO 未知媒体类型
+                                    print(f"{m['type']=}")
                             except:
                                 raise
                             else:
