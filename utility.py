@@ -1,8 +1,15 @@
 import os
-import session
+import requests
+import time
 
 def download(url: str, overwrite: bool, *, path = '.', name = None, change_suffix = False):
-    res = session.ses.get(url, stream=True)
+    try:
+        res = requests.get(url, stream=True)
+    except (requests.exceptions.ProxyError, requests.exceptions.SSLError) as err:
+        print(err)
+        print('Attempt to retry.')
+        time.sleep(10)
+        res = requests.get(url, stream=True)
     res.raise_for_status()
 
     origin = get_filename_from_path(url)
