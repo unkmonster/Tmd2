@@ -96,12 +96,16 @@ class TwitterUser:
                                         res.headers['x-rate-limit-remaining'],
                                         res.headers['x-rate-limit-limit']))
 
-        # 请求次数达到上限，挂起程序等待
+        
         if res.status_code == requests.codes.TOO_MANY:
-            waiting = res.headers['x-rate-limit-reset'] - time.time()
-            print('waiting with', waiting)
-            time.sleep(waiting)
-            res = ses.get(UserMedia.api, params=params)
+            # 请求次数达到上限，挂起程序等待重新请求
+            if int(res.headers['x-rate-limit-remaining']) > 0:
+                raise RuntimeError('Current account have reached the limit for seeing posts today.')               
+            else:
+                waiting = int(res.headers['x-rate-limit-reset']) - int(time.time()) + 1
+                print('waiting with', waiting)
+                time.sleep(waiting)
+                res = ses.get(UserMedia.api, params=params)
         
         if res.json()['data']['user']['result']['__typename'] == 'UserUnavailable':
             return list()
@@ -111,19 +115,18 @@ class TwitterUser:
         # 读取已下载推文列表
         with open(self.path + f'\\.{self.rest_id}') as f: 
             tweets = [l.strip() for l in f]
-          
-        try:
-            entries = self.get_timeline() 
-            # len <= 2 意味着到达底部
+                  
+        try:     
+            entries = self.get_timeline()   
             while len(entries) > 2:
                 # 遍历推文
                 for entry in entries:
                     content = entry['content']
                     
+                    # TODO
                     if content['entryType'] == 'TimelineTimelineItem':
                         if 'result' not in content['itemContent']['tweet_results']:
                             continue
-
                         if 'legacy' in content['itemContent']['tweet_results']['result']:
                             legacy = content['itemContent']['tweet_results']['result']['legacy']
                         else:
@@ -135,6 +138,7 @@ class TwitterUser:
                         # 遍历推文媒体并下载
                         medias = legacy.get('extended_entities')
                         if medias == None:
+                            # TODO NO MEDIA
                             continue
                         else:
                             medias = medias['media']
@@ -144,33 +148,33 @@ class TwitterUser:
                             if m['id_str'] in tweets:
                                 continue
                             try:
-                                if m['type'] == 'photo':
-                                    utility.download(m['media_url_https'], False, path=self.path, name=title)
-                                elif m['type'] == 'video':
-                                    variants = list(m['video_info']['variants'])
-                                    variants.sort(key=get_bitrate) 
-                                    while len(variants):
-                                        try:    
-                                            url = variants.pop()['url']                            
-                                            utility.download(url, False, path=self.path, name=title)
-                                        except requests.HTTPError as err:
-                                            if err.response.status_code == requests.codes.NOT_FOUND:                                    
-                                                continue
+                                match m['type']:
+                                    case 'photo':
+                                        utility.download(m['media_url_https'], False, path=self.path, name=title)                                       
+                                    case 'video':
+                                        variants = list(m['video_info']['variants'])
+                                        variants.sort(key=get_bitrate) 
+                                        while len(variants):
+                                            try:    
+                                                url = variants.pop()['url']                            
+                                                utility.download(url, False, path=self.path, name=title)
+                                            except requests.HTTPError as err:
+                                                if err.response.status_code == requests.codes.NOT_FOUND:                                    
+                                                    continue
+                                            else:
+                                                break
                                         else:
-                                            break
-                                    else:
-                                        raise RuntimeError('Media Not Found')
-                                else:
-                                    # TODO 未知媒体类型
-                                    print(f"{m['type']=}")
-                            except:
-                                raise
+                                            raise FileNotFoundError('No available resources')
+                                    case _:
+                                        pass  
+                            except FileNotFoundError as err:
+                                print(repr(err))
                             else:
                                 tweets.append(m['id_str'])
                     # 翻页   
                     elif content['entryType'] == 'TimelineTimelineCursor':
                         if content['cursorType'] == 'Bottom':   
-                            entries = self.get_timeline(cursor=content['value'])
+                            entries = self.get_timeline(cursor=content['value'])         
         finally:
             with open(self.path + f'\\.{self.rest_id}', 'w') as f: 
                 for id in tweets:

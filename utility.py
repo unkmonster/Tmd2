@@ -2,16 +2,20 @@ import os
 import requests
 import time
 
-def download(url: str, overwrite: bool, *, path = '.', name = None, change_suffix = False):
-    for i in range(10):
+def download(url: str, overwrite: bool, *, path = '.', name = None, change_suffix = False) -> bool:
+    count = 1
+    while True:
         try:
             res = requests.get(url, stream=True)
         except (requests.exceptions.ProxyError, requests.exceptions.SSLError) as err:
-            print(f'[{i+1}][{err}] Attempt to retry...')
+            if count > 10:
+                raise
+            print(f'[{i}][{err}] Attempt to retry...')
             time.sleep(10)
+            i = i + 1
         else:
+            res.raise_for_status()
             break
-    res.raise_for_status()
 
     origin = get_filename_from_path(url)
     if name == None:

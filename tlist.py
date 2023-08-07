@@ -70,10 +70,10 @@ class TweeterList:
             if instruction['type'] == "TimelineAddEntries":
                 return instruction['entries']
     
-    def download_all(self):
+    def download_all(self):   
+        count = 1
+        entries = self.get_members()
         try:
-            count = 1
-            entries = self.get_members()
             while len(entries) > 2:
                 for entry in entries:
                     content = entry['content']
