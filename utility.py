@@ -7,7 +7,7 @@ def download(url: str, overwrite: bool, *, path = '.', name = None, change_suffi
         res = requests.get(url, stream=True)
     except (requests.exceptions.ProxyError, requests.exceptions.SSLError) as err:
         print(err)
-        print('Attempt to retry.')
+        print('Attempt to retry...')
         time.sleep(10)
         res = requests.get(url, stream=True)
     res.raise_for_status()
@@ -41,4 +41,6 @@ def get_filename_from_path(path : str) -> str:
         path = path[:i]
     return path.split('/')[-1]
 
-
+# TEMP
+def timestamp_to_time(timestamp) -> str:
+    return time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(int(timestamp)))

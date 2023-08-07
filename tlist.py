@@ -34,14 +34,17 @@ class TweeterList:
         pass
     
     def is_exist(self) -> bool:
-        if self.rest_id in saving.j_lists:
-            return True
-        else:
-            return False
+        return self.rest_id in saving.j_lists
 
     def update_info(self):
         if self.name != saving.j_lists[self.rest_id]:
             os.rename(core.path + f'\\{saving.j_lists[self.rest_id]}', self.path)
+
+            if os.path.exists(self.path + '\\.history.ini'):
+                with open(self.path + '\\.history.ini', 'w', encoding='utf-8'):
+                    pass
+            with open(self.path + '\\.history.ini', 'a', encoding='utf-8') as f:
+                f.write(saving.j_lists[self.rest_id] + '\n')
             saving.j_lists[self.rest_id] = self.name
 
     def create_profile(self):
@@ -89,8 +92,6 @@ class TweeterList:
                             entries = self.get_members(cursor=content['value'])
                             break
                     pass
-        except:
-            raise
         finally:
             self.close()
     

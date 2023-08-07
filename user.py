@@ -56,15 +56,22 @@ class TwitterUser:
         if self.title != tlist.users[self.rest_id]:
             i = self.path.rfind('\\')
             os.rename(self.path[:i] + f'\\{tlist.users[self.rest_id]}', self.path)
+
+            # Save history of username
+            
+            # Create
+            if os.path.exists(self.path + '\\.history.ini'):
+                with open(self.path + '\\.history.ini', 'w', encoding='utf-8'):
+                    pass
+            # Read
+            with open(self.path + '\\.history.ini', 'a', encoding='utf-8') as f:
+                f.write(tlist.users[self.rest_id] + '\n')
+            
             tlist.users[self.rest_id] = self.title
         pass
 
     def is_exist(self) -> bool:
-        # TODO
-        if self.rest_id in tlist.users:          
-            return True
-        else:
-            return False
+        return self.rest_id in tlist.users
     
     def create_profile(self):
         tlist.users[self.rest_id] = self.title
@@ -82,16 +89,19 @@ class TwitterUser:
         UserMedia.params['variables']['userId'] = self.rest_id
         UserMedia.params['variables']['count'] = count
         UserMedia.params['variables']['cursor'] = cursor
-
-        # 格式化词典
         params = {k: json.dumps(v) for k, v in UserMedia.params.items()}
         
         res = ses.get(UserMedia.api, params=params)
+        print('Before {}, {}/{}'.format(utility.timestamp_to_time(res.headers['x-rate-limit-reset']),
+                                        res.headers['x-rate-limit-remaining'],
+                                        res.headers['x-rate-limit-limit']))
 
+        # 请求次数达到上限，挂起程序等待
         if res.status_code == requests.codes.TOO_MANY:
             waiting = res.headers['x-rate-limit-reset'] - time.time()
             print('waiting with', waiting)
             time.sleep(waiting)
+            res = ses.get(UserMedia.api, params=params)
         
         if res.json()['data']['user']['result']['__typename'] == 'UserUnavailable':
             return list()
@@ -100,7 +110,7 @@ class TwitterUser:
     def download_all(self):
         # 读取已下载推文列表
         with open(self.path + f'\\.{self.rest_id}') as f: 
-            tlist = [l.strip() for l in f]
+            tweets = [l.strip() for l in f]
           
         try:
             entries = self.get_timeline() 
@@ -131,7 +141,7 @@ class TwitterUser:
 
                         for m in medias:
                             # 利用媒体ID判断此媒体本地是否已存在
-                            if m['id_str'] in tlist:
+                            if m['id_str'] in tweets:
                                 continue
                             try:
                                 if m['type'] == 'photo':
@@ -156,12 +166,12 @@ class TwitterUser:
                             except:
                                 raise
                             else:
-                                tlist.append(m['id_str'])
-                       
+                                tweets.append(m['id_str'])
+                    # 翻页   
                     elif content['entryType'] == 'TimelineTimelineCursor':
-                        if content['cursorType'] == 'Bottom':   # 翻页
+                        if content['cursorType'] == 'Bottom':   
                             entries = self.get_timeline(cursor=content['value'])
         finally:
             with open(self.path + f'\\.{self.rest_id}', 'w') as f: 
-                for id in tlist:
+                for id in tweets:
                     f.write(id + '\n')
