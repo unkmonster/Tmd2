@@ -8,11 +8,12 @@ def download(url: str, overwrite: bool, *, path = '.', name = None, change_suffi
         try:
             res = requests.get(url, stream=True)
         except (requests.exceptions.ProxyError, requests.exceptions.SSLError) as err:
-            if count > 10:
+            if count > 5:
                 raise
-            print(f'[{i}][{err}] Attempt to retry...')
+            print(repr(err))
+            print(f'[{count}] Attempting to retry...')
             time.sleep(10)
-            i = i + 1
+            count = count + 1
         else:
             res.raise_for_status()
             break
@@ -35,7 +36,8 @@ def download(url: str, overwrite: bool, *, path = '.', name = None, change_suffi
         while os.path.exists(path + f'\\{name}'):
             name = pre + '_' + str(count) + '.' + suf
             count = count + 1
-        
+    
+    print(name) 
     with open(path + f'\\{name}', 'wb') as f:
         for chunk in res.iter_content(chunk_size=1024):
             f.write(chunk)
