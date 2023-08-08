@@ -1,6 +1,7 @@
 from api import UserMedia
 from api import UserByScreenName
 from session import ses 
+from session import switch_account
 import json
 import pattern
 import core
@@ -98,14 +99,14 @@ class TwitterUser:
 
         
         if res.status_code == requests.codes.TOO_MANY:
-            # 请求次数达到上限，挂起程序等待重新请求
             if int(res.headers['x-rate-limit-remaining']) > 0:
-                raise RuntimeError('Current account have reached the limit for seeing posts today.')               
+                switch_account()           
+            # 请求次数达到上限，挂起程序等待重新请求
             else:
                 waiting = int(res.headers['x-rate-limit-reset']) - int(time.time()) + 1
-                print('waiting with', waiting)
+                print('Waiting for', waiting)
                 time.sleep(waiting)
-                res = ses.get(UserMedia.api, params=params)
+            res = ses.get(UserMedia.api, params=params)
         
         if res.json()['data']['user']['result']['__typename'] == 'UserUnavailable':
             return list()
@@ -131,11 +132,9 @@ class TwitterUser:
                             legacy = content['itemContent']['tweet_results']['result']['legacy']
                         else:
                             legacy = content['itemContent']['tweet_results']['result']['tweet']['legacy'] 
-                       
-                        title = handle_title(legacy['full_text'])
-                        print(title)
-                       
+                                                              
                         # 遍历推文媒体并下载
+                        title = handle_title(legacy['full_text']) 
                         medias = legacy.get('extended_entities')
                         if medias == None:
                             # TODO NO MEDIA
@@ -167,7 +166,7 @@ class TwitterUser:
                                             raise FileNotFoundError('No available resources')
                                     case _:
                                         pass  
-                            except FileNotFoundError as err:
+                            except Exception as err:
                                 print(repr(err))
                             else:
                                 tweets.append(m['id_str'])

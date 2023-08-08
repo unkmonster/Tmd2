@@ -113,3 +113,12 @@ class ListByRestId:
             "responsive_web_graphql_timeline_navigation_enabled":True
         }
     )
+
+class Settings:
+    api = 'https://api.twitter.com/1.1/account/settings.json'
+
+    # params = {
+    #     'include_mention_filter': True,
+    #     'include_nsfw_user_flag': True,
+    #     include_nsfw_admin_flag: True
+    # }
