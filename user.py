@@ -2,6 +2,7 @@ from api import UserMedia
 from api import UserByScreenName
 from session import ses 
 from session import switch_account
+from logger import logger
 import json
 import pattern
 import core
@@ -11,6 +12,7 @@ import utility
 import tlist
 import requests
 import time
+import datetime
 
 def handle_title(full_text: str) -> str:
     full_text = pattern.url.sub('', full_text)
@@ -44,6 +46,7 @@ class TwitterUser:
         self.rest_id = rest_id
         self.title = f'{pattern.nonsupport.sub("", self.name)}({self.screen_name})'
         self.path = core.path + f'\\{relative_path}\\{self.title}'
+        self.fail = []  
         
         if not self.is_exist():
             self.create_profile()
@@ -93,18 +96,19 @@ class TwitterUser:
         params = {k: json.dumps(v) for k, v in UserMedia.params.items()}
         
         res = ses.get(UserMedia.api, params=params)
-        print('Before {}, {}/{}'.format(utility.timestamp_to_time(res.headers['x-rate-limit-reset']),
-                                        res.headers['x-rate-limit-remaining'],
-                                        res.headers['x-rate-limit-limit']))
+        # print('Before {}, {}/{}'.format(utility.timestamp_to_time(res.headers['x-rate-limit-reset']),
+        #                                 res.headers['x-rate-limit-remaining'],
+        #                                 res.headers['x-rate-limit-limit']))
 
         
         if res.status_code == requests.codes.TOO_MANY:
             if int(res.headers['x-rate-limit-remaining']) > 0:
                 switch_account()           
             # 请求次数达到上限，挂起程序等待重新请求
-            else:
+            else: 
+                t = datetime.datetime.fromtimestamp(int(res.headers['x-rate-limit-limit']))             
+                logger.warning('Reaching rate-limit wait until {}'.format(t.strftime("%Y-%m-%d %H:%M:%S") ))
                 waiting = int(res.headers['x-rate-limit-reset']) - int(time.time()) + 1
-                print('Waiting for', waiting)
                 time.sleep(waiting)
             res = ses.get(UserMedia.api, params=params)
         
@@ -116,7 +120,8 @@ class TwitterUser:
         # 读取已下载推文列表
         with open(self.path + f'\\.{self.rest_id}') as f: 
             tweets = [l.strip() for l in f]
-                  
+
+        success, fail = 0, 0      
         try:     
             entries = self.get_timeline()   
             while len(entries) > 2:
@@ -128,16 +133,22 @@ class TwitterUser:
                     if content['entryType'] == 'TimelineTimelineItem':
                         if 'result' not in content['itemContent']['tweet_results']:
                             continue
-                        if 'legacy' in content['itemContent']['tweet_results']['result']:
-                            legacy = content['itemContent']['tweet_results']['result']['legacy']
+
+                        result = content['itemContent']['tweet_results']['result']
+                        if result['__typename'] == 'TweetWithVisibilityResults':    # sensitive
+                            legacy = result['tweet']['legacy']
+                            tweet_url = 'https://twitter.com/{}/status/{}'.format(self.screen_name, result['tweet']['rest_id']) 
                         else:
-                            legacy = content['itemContent']['tweet_results']['result']['tweet']['legacy'] 
-                                                              
+                            legacy = result['legacy'] 
+                            tweet_url = 'https://twitter.com/{}/status/{}'.format(self.screen_name, result['rest_id']) 
+                                                                                    
+                        title = handle_title(legacy['full_text'])
+                        
+                        
                         # 遍历推文媒体并下载
-                        title = handle_title(legacy['full_text']) 
                         medias = legacy.get('extended_entities')
-                        if medias == None:
-                            # TODO NO MEDIA
+                        if medias == None:                    
+                            fail = fail + 1
                             continue
                         else:
                             medias = medias['media']
@@ -167,9 +178,11 @@ class TwitterUser:
                                     case _:
                                         pass  
                             except Exception as err:
-                                print(repr(err))
+                                logger.warning(f"{repr(err)}: {tweet_url}")
+                                fail = fail + 1
                             else:
                                 tweets.append(m['id_str'])
+                                success = success + 1
                     # 翻页   
                     elif content['entryType'] == 'TimelineTimelineCursor':
                         if content['cursorType'] == 'Bottom':   
@@ -178,3 +191,6 @@ class TwitterUser:
             with open(self.path + f'\\.{self.rest_id}', 'w') as f: 
                 for id in tweets:
                     f.write(id + '\n')
+            if (success or fail) != 0:
+                logger.info('{}(@{}): All of medias have been downloaded: {} | {}'.format(self.name, self.screen_name,success, fail))
+            return success, fail

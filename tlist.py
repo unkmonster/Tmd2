@@ -4,6 +4,7 @@ import os
 import core
 import saving
 from api import ListByRestId, ListMembers
+from logger import logger
 from session import ses
 import user
 
@@ -80,7 +81,14 @@ class TweeterList:
                     if content['entryType'] == 'TimelineTimelineItem':
                         result = content['itemContent']['user_results']['result']
                         
-                        print(f"[{result['legacy']['name']}]", f"{count}/{self.member_count}")
+                        # pre = '{}(@{}) [{}/{}]: '.format(
+                        #     result['legacy']['name'],
+                        #     result['legacy']['screen_name'],
+                        #     count,
+                        #     self.member_count
+                        # )
+
+                        #logger.info(pre + 'started downloading')
                         user.TwitterUser(result['legacy']['screen_name'], 
                                     self.name, 
                                     result['legacy']['name'],

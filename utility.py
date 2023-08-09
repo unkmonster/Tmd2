@@ -1,6 +1,7 @@
 import os
 import requests
 import time
+from logger import logger
 
 def download(url: str, overwrite: bool, *, path = '.', name = None, change_suffix = False) -> bool:
     count = 1
@@ -10,8 +11,8 @@ def download(url: str, overwrite: bool, *, path = '.', name = None, change_suffi
         except (requests.exceptions.ProxyError, requests.exceptions.SSLError) as err:
             if count > 5:
                 raise
-            print(repr(err))
-            print(f'[{count}] Attempting to retry...')
+            logger.warning(repr(err))
+            logger.warning(f'[{count}] Attempting to retry...')
             time.sleep(10)
             count = count + 1
         else:
@@ -37,7 +38,7 @@ def download(url: str, overwrite: bool, *, path = '.', name = None, change_suffi
             name = pre + '_' + str(count) + '.' + suf
             count = count + 1
     
-    print(name) 
+    logger.debug(name) 
     with open(path + f'\\{name}', 'wb') as f:
         for chunk in res.iter_content(chunk_size=1024):
             f.write(chunk)
