@@ -6,6 +6,7 @@ import saving
 from api import ListByRestId, ListMembers
 from session import ses
 import user
+from progress import prog
 
 users = list()
 
@@ -71,27 +72,27 @@ class TweeterList:
                 return instruction['entries']
     
     def download_all(self):   
-        count = 1
         entries = self.get_members()
         try:
-            while len(entries) > 2:
-                for entry in entries:
-                    content = entry['content']
-                    if content['entryType'] == 'TimelineTimelineItem':
-                        result = content['itemContent']['user_results']['result']
-                        
-                        print(f"[{result['legacy']['name']}]", f"{count}/{self.member_count}")
-                        user.TwitterUser(result['legacy']['screen_name'], 
-                                    self.name, 
-                                    result['legacy']['name'],
-                                    result['rest_id']).download_all()
-                        count = count + 1
-                   
-                    elif content['entryType'] == 'TimelineTimelineCursor':
-                        if content['cursorType'] == 'Bottom':
-                            entries = self.get_members(cursor=content['value'])
-                            break
-                    pass
+            with prog:
+                t1 = prog.add_task(self.name, total=self.member_count)                
+                while len(entries) > 2:
+                    for entry in entries:
+                        content = entry['content']
+                        if content['entryType'] == 'TimelineTimelineItem':
+                            result = content['itemContent']['user_results']['result']
+                            
+                            #print(f"[{result['legacy']['name']}]", f"{count}/{self.member_count}")
+                            
+                            user.TwitterUser(result['legacy']['screen_name'], 
+                                        self.name, 
+                                        result['legacy']['name'],
+                                        result['rest_id']).download_all()
+                            prog.advance(t1)
+                        elif content['entryType'] == 'TimelineTimelineCursor':
+                            if content['cursorType'] == 'Bottom':
+                                entries = self.get_members(cursor=content['value'])
+                                break                       
         finally:
             self.close()
     

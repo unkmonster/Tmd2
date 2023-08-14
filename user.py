@@ -2,6 +2,7 @@ from api import UserMedia
 from api import UserByScreenName
 from session import ses 
 from session import switch_account
+from progress import prog
 import json
 import pattern
 import core
@@ -11,6 +12,7 @@ import utility
 import tlist
 import requests
 import time
+import datetime
 
 def handle_title(full_text: str) -> str:
     full_text = pattern.url.sub('', full_text)
@@ -93,19 +95,19 @@ class TwitterUser:
         params = {k: json.dumps(v) for k, v in UserMedia.params.items()}
         
         res = ses.get(UserMedia.api, params=params)
-        print('Before {}, {}/{}'.format(utility.timestamp_to_time(res.headers['x-rate-limit-reset']),
-                                        res.headers['x-rate-limit-remaining'],
-                                        res.headers['x-rate-limit-limit']))
-
-        
+        # print('Before {}, {}/{}'.format(utility.timestamp_to_time(res.headers['x-rate-limit-reset']),
+        #                                 res.headers['x-rate-limit-remaining'],
+        #                                 res.headers['x-rate-limit-limit']))       
         if res.status_code == requests.codes.TOO_MANY:
             if int(res.headers['x-rate-limit-remaining']) > 0:
                 switch_account()           
             # 请求次数达到上限，挂起程序等待重新请求
-            else:
-                waiting = int(res.headers['x-rate-limit-reset']) - int(time.time()) + 1
-                print('Waiting for', waiting)
-                time.sleep(waiting)
+            else:                            
+                dt = datetime.datetime.fromtimestamp(int(res.headers['x-rate-limit-reset']))            
+                print('Reaching rate-limit wait until {}'.format(dt.strftime("%Y-%m-%d %H:%M:%S")))
+
+                second = dt.timestamp() - datetime.datetime.now().timestamp()
+                time.sleep(second)
             res = ses.get(UserMedia.api, params=params)
         
         if res.json()['data']['user']['result']['__typename'] == 'UserUnavailable':
