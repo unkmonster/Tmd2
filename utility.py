@@ -3,20 +3,18 @@ import requests
 import time
 
 def download(url: str, overwrite: bool, *, path = '.', name = None, change_suffix = False) -> bool:
-    count = 1
-    while True:
+    for i in range(6):
         try:
             res = requests.get(url, stream=True)
-        except (requests.exceptions.ProxyError, requests.exceptions.SSLError) as err:
-            if count > 5:
-                raise
+        except (requests.exceptions.ProxyError, requests.exceptions.SSLError) as err:                   
             print(repr(err))
-            print(f'[{count}] Attempting to retry...')
-            time.sleep(10)
-            count = count + 1
+            print(f'[{i}] Attempting to retry...')
+            time.sleep(5)
         else:
             res.raise_for_status()
             break
+    else:
+        raise
 
     origin = get_filename_from_path(url)
     if name == None:
@@ -48,6 +46,4 @@ def get_filename_from_path(path : str) -> str:
         path = path[:i]
     return path.split('/')[-1]
 
-# TEMP
-def timestamp_to_time(timestamp) -> str:
-    return time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(int(timestamp)))
+timeformat = '%a %b %d %H:%M:%S %z %Y'

@@ -2,17 +2,16 @@ from api import UserMedia
 from api import UserByScreenName
 from session import ses 
 from session import switch_account
-from progress import prog
 import json
 import pattern
 import core
 import os
 import pattern
 import utility
-import tlist
+import userlist
 import requests
 import time
-import datetime
+from datetime import datetime
 
 def handle_title(full_text: str) -> str:
     full_text = pattern.url.sub('', full_text)
@@ -30,13 +29,17 @@ def get_bitrate(variant) -> int:
     return bit
 
 class TwitterUser:
+    users = {}
     def __init__(self, screen_name: str, relative_path = '', name = None, rest_id = None) -> None:       
         # Get 'name' and 'rest_id'
         if (name or rest_id) == None:
             UserByScreenName.params['variables']['screen_name'] = screen_name
             params = {k: json.dumps(v) for k, v in UserByScreenName.params.items()}
             res = ses.get(UserByScreenName.api, params=params)
-            res.raise_for_status()
+            try:
+                res.raise_for_status()
+            except requests.exceptions.HTTPError as err:
+                print(repr(err))
 
             name = res.json()['data']['user']['result']['legacy']['name']
             rest_id = res.json()['data']['user']['result']['rest_id']
@@ -51,40 +54,24 @@ class TwitterUser:
             self.create_profile()
         else:
             self.update_info()
-            #os.mkdir(core.path + '\\')
         pass
+    
+    def is_exist(self) -> bool:
+        return self.rest_id in TwitterUser.users
     
     def update_info(self):
-        # 用户已更改用户名
-        if self.title != tlist.users[self.rest_id]:
+        # have changed name
+        if self.title != TwitterUser.users[self.rest_id]['names'][0]:
             i = self.path.rfind('\\')
-            os.rename(self.path[:i] + f'\\{tlist.users[self.rest_id]}', self.path)
-
-            # Save history of username
-            
-            # Create
-            if os.path.exists(self.path + '\\.history.ini'):
-                with open(self.path + '\\.history.ini', 'w', encoding='utf-8'):
-                    pass
-            # Read
-            with open(self.path + '\\.history.ini', 'a', encoding='utf-8') as f:
-                f.write(tlist.users[self.rest_id] + '\n')
-            
-            tlist.users[self.rest_id] = self.title
+            os.rename(self.path[:i] + f'\\{TwitterUser.users[self.rest_id]["names"][0]}', self.path)        
+            list(TwitterUser.users[self.rest_id]['names']).insert(0, self.title)
         pass
-
-    def is_exist(self) -> bool:
-        return self.rest_id in tlist.users
     
     def create_profile(self):
-        tlist.users[self.rest_id] = self.title
+        TwitterUser.users[self.rest_id] = {'names': [self.title], 'latest': ''}
 
         if not os.path.exists(self.path):
             os.mkdir(self.path)
-        
-        if not os.path.exists(self.path + f'\\.{self.rest_id}'):          
-            with open(self.path + f'\\.{self.rest_id}', 'w'):
-                pass
 
     def get_timeline(self, count=50, cursor="") -> list:
         """Return tweetlist of the user.
@@ -94,18 +81,14 @@ class TwitterUser:
         UserMedia.params['variables']['cursor'] = cursor
         params = {k: json.dumps(v) for k, v in UserMedia.params.items()}
         
-        res = ses.get(UserMedia.api, params=params)
-        # print('Before {}, {}/{}'.format(utility.timestamp_to_time(res.headers['x-rate-limit-reset']),
-        #                                 res.headers['x-rate-limit-remaining'],
-        #                                 res.headers['x-rate-limit-limit']))       
+        res = ses.get(UserMedia.api, params=params)     
         if res.status_code == requests.codes.TOO_MANY:
             if int(res.headers['x-rate-limit-remaining']) > 0:
                 switch_account()           
             # 请求次数达到上限，挂起程序等待重新请求
             else:                            
                 dt = datetime.datetime.fromtimestamp(int(res.headers['x-rate-limit-reset']))            
-                print('Reaching rate-limit wait until {}'.format(dt.strftime("%Y-%m-%d %H:%M:%S")))
-
+                print('Because reach rate-limit, wait until {}'.format(dt.strftime("%Y-%m-%d %H:%M:%S")))
                 second = dt.timestamp() - datetime.datetime.now().timestamp()
                 time.sleep(second)
             res = ses.get(UserMedia.api, params=params)
@@ -113,70 +96,80 @@ class TwitterUser:
         if res.json()['data']['user']['result']['__typename'] == 'UserUnavailable':
             return list()
         return res.json()['data']['user']['result']['timeline_v2']['timeline']['instructions'][0]['entries']
+    
+    def get_entries(self) -> list:
+        items = []
+        latest = TwitterUser.users[self.rest_id]['latest']
+        if latest != '':
+            last = datetime.strptime(latest, utility.timeformat).timestamp()
+        
+        entries = self.get_timeline()       
+        while len(entries) > 2:
+            # 遍历推文
+            for entry in entries:
+                content = entry['content']
+
+                if content['entryType'] == 'TimelineTimelineItem':
+                    result = dict(content['itemContent']['tweet_results']).get('result')
+                    if result == None:
+                        continue
+                    if result['__typename'] == 'TweetWithVisibilityResults':
+                        legacy = result['tweet']['legacy']
+                    else:
+                        legacy = result['legacy']
+
+                    if TwitterUser.users[self.rest_id]['latest'] != '':                  
+                        if (datetime.strptime(legacy['created_at'], utility.timeformat).timestamp() <= last):
+                            entries.clear()
+                            break
+                    
+                    if len(items) == 0:
+                        latest = legacy['created_at']     
+
+                    title = handle_title(legacy['full_text']) 
+                    medias = legacy.get('extended_entities')
+                    if medias == None:
+                        # TODO NO MEDIA
+                        continue
+                    else:
+                        medias = medias['media']
+
+                    item = {}
+                    urls = []
+                    vurls = []
+                    for m in medias:
+                        match m['type']:
+                            case 'photo':
+                                urls.append(m['media_url_https'])                                                                      
+                            case 'video':
+                                variants = list(m['video_info']['variants'])
+                                variants.sort(key=get_bitrate)      
+                                vurl = [u['url'] for u in variants]
+                                vurls.append(vurl)                      
+                            case _:
+                                pass  
+                    item['title'] = title
+                    item['urls'] = urls
+                    item['vurls'] = vurls
+                    items.append(item)                   
+                # 翻页   
+                elif content['entryType'] == 'TimelineTimelineCursor':
+                    if content['cursorType'] == 'Bottom':   
+                        entries = self.get_timeline(cursor=content['value'])  
+        TwitterUser.users[self.rest_id]['latest'] = latest
+        return items
 
     def download_all(self):
-        # 读取已下载推文列表
-        with open(self.path + f'\\.{self.rest_id}') as f: 
-            tweets = [l.strip() for l in f]
-                  
-        try:     
-            entries = self.get_timeline()   
-            while len(entries) > 2:
-                # 遍历推文
-                for entry in entries:
-                    content = entry['content']
-                    
-                    # TODO
-                    if content['entryType'] == 'TimelineTimelineItem':
-                        if 'result' not in content['itemContent']['tweet_results']:
+        items = self.get_entries()   
+        for item in items:
+            for p in item['urls']:
+                utility.download(p, False, path=self.path, name=item['title'])
+            for v in item['vurls']:
+                while len(v):
+                    try:
+                       utility.download(v.pop(), False, path=self.path, name=item['title']) 
+                    except requests.HTTPError as err:
+                        if err.response.status_code == requests.codes.NOT_FOUND:                                    
                             continue
-                        if 'legacy' in content['itemContent']['tweet_results']['result']:
-                            legacy = content['itemContent']['tweet_results']['result']['legacy']
-                        else:
-                            legacy = content['itemContent']['tweet_results']['result']['tweet']['legacy'] 
-                                                              
-                        # 遍历推文媒体并下载
-                        title = handle_title(legacy['full_text']) 
-                        medias = legacy.get('extended_entities')
-                        if medias == None:
-                            # TODO NO MEDIA
-                            continue
-                        else:
-                            medias = medias['media']
-
-                        for m in medias:
-                            # 利用媒体ID判断此媒体本地是否已存在
-                            if m['id_str'] in tweets:
-                                continue
-                            try:
-                                match m['type']:
-                                    case 'photo':
-                                        utility.download(m['media_url_https'], False, path=self.path, name=title)                                       
-                                    case 'video':
-                                        variants = list(m['video_info']['variants'])
-                                        variants.sort(key=get_bitrate) 
-                                        while len(variants):
-                                            try:    
-                                                url = variants.pop()['url']                            
-                                                utility.download(url, False, path=self.path, name=title)
-                                            except requests.HTTPError as err:
-                                                if err.response.status_code == requests.codes.NOT_FOUND:                                    
-                                                    continue
-                                            else:
-                                                break
-                                        else:
-                                            raise FileNotFoundError('No available resources')
-                                    case _:
-                                        pass  
-                            except Exception as err:
-                                print(repr(err))
-                            else:
-                                tweets.append(m['id_str'])
-                    # 翻页   
-                    elif content['entryType'] == 'TimelineTimelineCursor':
-                        if content['cursorType'] == 'Bottom':   
-                            entries = self.get_timeline(cursor=content['value'])         
-        finally:
-            with open(self.path + f'\\.{self.rest_id}', 'w') as f: 
-                for id in tweets:
-                    f.write(id + '\n')
+                    else:
+                        break

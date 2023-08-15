@@ -1,14 +1,12 @@
 import json
 import core
 import os
-
-j_lists = dict()
+from userlist import UserList
 
 def init():
     if not os.path.exists(core.path):
         os.mkdir(core.path)
     
-    # TODO
     if not os.path.exists(core.path + '\\.lists.json'):
         with open(core.path + '\\.lists.json', 'w', encoding='utf-8') as f:
             json.dump(dict(), f)
@@ -16,10 +14,10 @@ def init():
     
     # 读取已存在'列表'
     with open(core.path + '\\.lists.json', 'r', encoding='utf-8') as f:
-        global j_lists
-        j_lists = json.load(f)
+        UserList.userlists = json.load(f)
         pass
 
 def uninit():
+    print('uninit')
     with open(core.path + '\\.lists.json', 'w', encoding='utf-8') as f:
-        json.dump(j_lists, f, ensure_ascii=False, indent=4, separators=(',', ': '))
+        json.dump(UserList.userlists, f, ensure_ascii=False, indent=4, separators=(',', ': '))
