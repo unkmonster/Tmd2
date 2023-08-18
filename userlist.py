@@ -39,6 +39,7 @@ class UserList:
         with open(self.path + '\\.users.json', 'w', encoding='utf-8') as f:
             json.dump(TwitterUser.users, f, ensure_ascii=False, indent=4, separators=(',', ': '))
         TwitterUser.users.clear()
+        print('__del__')
     
     def is_exist(self) -> bool:
         return self.rest_id in UserList.userlists

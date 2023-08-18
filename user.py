@@ -64,7 +64,7 @@ class TwitterUser:
         if self.title != TwitterUser.users[self.rest_id]['names'][0]:
             i = self.path.rfind('\\')
             os.rename(self.path[:i] + f'\\{TwitterUser.users[self.rest_id]["names"][0]}', self.path)        
-            list(TwitterUser.users[self.rest_id]['names']).insert(0, self.title)
+            TwitterUser.users[self.rest_id]['names'].insert(0, self.title)
         pass
     
     def create_profile(self):
@@ -159,8 +159,9 @@ class TwitterUser:
         TwitterUser.users[self.rest_id]['latest'] = latest
         return items
 
-    def download_all(self):
+    def download_all(self):       
         items = self.get_entries()   
+        print(f"{self.name}({self.screen_name}) {len(items)}")
         for item in items:
             for p in item['urls']:
                 utility.download(p, False, path=self.path, name=item['title'])
