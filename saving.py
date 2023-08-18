@@ -12,7 +12,6 @@ def init():
             json.dump(dict(), f)
             pass
     
-    # 读取已存在'列表'
     with open(core.path + '\\.lists.json', 'r', encoding='utf-8') as f:
         UserList.userlists = json.load(f)
         pass
