@@ -48,14 +48,16 @@ class TwitterUser:
         self.name = name
         self.rest_id = rest_id
         self.title = f'{pattern.nonsupport.sub("", self.name)}({self.screen_name})'
-        self.path = core.path + f'\\{relative_path}\\{self.title}'
+        self.path = core.path + f'\\{relative_path}\\{self.title}'        
         
         if not self.is_exist():
             self.create_profile()
         else:
             self.update_info()
-        pass
-    
+
+        self.latest = TwitterUser.users[self.rest_id]['latest']
+        pass  
+
     def is_exist(self) -> bool:
         return self.rest_id in TwitterUser.users
     
@@ -99,9 +101,9 @@ class TwitterUser:
     
     def get_entries(self) -> list:
         items = []
-        latest = TwitterUser.users[self.rest_id]['latest']
-        if latest != '':
-            last = datetime.strptime(latest, utility.timeformat).timestamp()
+        last = self.latest
+        if last != '':
+            latest_timestamp = datetime.strptime(last, utility.timeformat).timestamp()
         
         entries = self.get_timeline()       
         while len(entries) > 2:
@@ -118,13 +120,13 @@ class TwitterUser:
                     else:
                         legacy = result['legacy']
 
-                    if TwitterUser.users[self.rest_id]['latest'] != '':                  
-                        if (datetime.strptime(legacy['created_at'], utility.timeformat).timestamp() <= last):
+                    if last != '':                  
+                        if (datetime.strptime(legacy['created_at'], utility.timeformat).timestamp() <= latest_timestamp):
                             entries.clear()
                             break
                     
                     if len(items) == 0:
-                        latest = legacy['created_at']     
+                        self.latest = legacy['created_at']     
 
                     title = handle_title(legacy['full_text']) 
                     medias = legacy.get('extended_entities')
@@ -156,21 +158,22 @@ class TwitterUser:
                 elif content['entryType'] == 'TimelineTimelineCursor':
                     if content['cursorType'] == 'Bottom':   
                         entries = self.get_timeline(cursor=content['value'])  
-        TwitterUser.users[self.rest_id]['latest'] = latest
         return items
 
-    def download_all(self):       
-        items = self.get_entries()   
-        print(f"{self.name}({self.screen_name}) {len(items)}")
+    def download_all(self):    
+        items = self.get_entries()
+        if len(items):
+            print(f"{self.name}({self.screen_name}) {len(items)}")
         for item in items:
             for p in item['urls']:
                 utility.download(p, False, path=self.path, name=item['title'])
             for v in item['vurls']:
                 while len(v):
                     try:
-                       utility.download(v.pop(), False, path=self.path, name=item['title']) 
+                        utility.download(v.pop(), False, path=self.path, name=item['title']) 
                     except requests.HTTPError as err:
                         if err.response.status_code == requests.codes.NOT_FOUND:                                    
                             continue
                     else:
                         break
+        TwitterUser.users[self.rest_id]['latest'] = self.latest
