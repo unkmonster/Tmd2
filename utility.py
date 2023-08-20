@@ -24,7 +24,7 @@ def download(url: str, overwrite: bool, *, path = '.', name = None, change_suffi
             name = pre + '_' + str(count) + '.' + suf
             count = count + 1
     
-    print(name) 
+    #print(name) 
     with open(path + f'\\{name}', 'wb') as f:
         for chunk in res.iter_content(chunk_size=1024):
             f.write(chunk)

@@ -162,9 +162,7 @@ class TwitterUser:
 
     def download_all(self):    
         items = self.get_entries()
-        if len(items):
-            print(f"{self.name}({self.screen_name}) {len(items)}")
-        for item in items:
+        for i, item in enumerate(items):
             for p in item['urls']:
                 utility.download(p, False, path=self.path, name=item['title'])
             for v in item['vurls']:
@@ -176,4 +174,5 @@ class TwitterUser:
                             continue
                     else:
                         break
+            print("[{}(@{}) {}/{}] {}".format(self.name, self.screen_name, i+1, len(items), item['title']))
         TwitterUser.users[self.rest_id]['latest'] = self.latest
