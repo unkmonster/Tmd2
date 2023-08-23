@@ -22,10 +22,12 @@ def switch_account():
         ses.headers.update(account)
 
         res = ses.get(Settings.api)
-        res.raise_for_status()
+        try:
+            res.raise_for_status()
+        except requests.HTTPError as er:
+            logger.error(er)
         logger.info(f"Current account has been switched to [{res.json()['screen_name']}]")
     else:
         raise RuntimeError('All of accounts have reached the limit for seeing posts today.')
 
 switch_account()
-pass

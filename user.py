@@ -14,6 +14,8 @@ import time
 from datetime import datetime
 from logger import logger
 
+#TODO 日期升序下载
+
 def handle_title(full_text: str) -> str:
     full_text = pattern.url.sub('', full_text)
     full_text = pattern.at.sub('', full_text)
@@ -57,6 +59,7 @@ class TwitterUser:
             self.update_info()
 
         self.latest = TwitterUser.users[self.rest_id]['latest']
+        self.failure = []
         pass  
 
     def is_exist(self) -> bool:
@@ -161,19 +164,43 @@ class TwitterUser:
                         entries = self.get_timeline(cursor=content['value'])  
         return items
 
+    def retry(self):
+        for i, item in enumerate(self.failure):
+            try:
+                utility.download(item['url'], False, path=self.path, name=item['title'])
+            except requests.RequestException as er:
+                print(er)
+                continue
+            else:
+                print("{}(@{}) {}/{} > {}".format(self.name, self.screen_name, i+1, len(self.failure), item['title']))
+
     def download_all(self):    
         items = self.get_entries()
         for i, item in enumerate(items):
             for p in item['urls']:
-                utility.download(p, False, path=self.path, name=item['title'])
+                try:
+                    utility.download(p, False, path=self.path, name=item['title'])
+                except requests.RequestException as ex:
+                    print(ex)
+                    self.failure.append({"title": item['title'], "url": p})
+                    continue
             for v in item['vurls']:
                 while len(v):
                     try:
-                        utility.download(v.pop(), False, path=self.path, name=item['title']) 
+                        url = v.pop()
+                        utility.download(url, False, path=self.path, name=item['title']) 
                     except requests.HTTPError as err:
                         if err.response.status_code == requests.codes.NOT_FOUND:                                    
                             continue
+                    except requests.RequestException as ex:
+                        self.failure.append({"title": item['title'], "url": url})
+                        break
                     else:
                         break
-            logger.info("[{}(@{}) {}/{}] {}".format(self.name, self.screen_name, i+1, len(items), item['title']))
+            logger.info("{}(@{}) {}/{} > {}".format(self.name, self.screen_name, i+1, len(items), item['title']))
         TwitterUser.users[self.rest_id]['latest'] = self.latest
+
+        l = len(self.failure)
+        if l > 0:
+            logger.warning(f'{self.name}(@{self.screen_name}) > failures: {l}')
+            self.retry()

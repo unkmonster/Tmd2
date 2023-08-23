@@ -1,7 +1,7 @@
 import json
 import os
 import core
-import user
+import requests
 from api import ListByRestId, ListMembers
 from progress import prog
 from session import ses
@@ -19,7 +19,10 @@ class UserList:
         params = {k: json.dumps(v) for k, v in ListByRestId.params.items()}
         
         res = ses.get(ListByRestId.api, params=params)
-        res.raise_for_status()
+        try:
+            res.raise_for_status()
+        except requests.exceptions.HTTPError as err:
+            print(err)
 
         list = res.json()['data']['list']
         self.name = list['name']
@@ -67,7 +70,10 @@ class UserList:
         params = {k: json.dumps(v) for k, v in ListMembers.params.items()}
 
         res = ses.get(ListMembers.api, params=params)
-        res.raise_for_status()
+        try:
+            res.raise_for_status()
+        except requests.exceptions.HTTPError as err:
+            print(err)
 
         for instruction in res.json()['data']['list']['members_timeline']['timeline']['instructions']:
             if instruction['type'] == "TimelineAddEntries":
@@ -76,15 +82,14 @@ class UserList:
     def download_all(self):   
         entries = self.get_members()
         with prog:
-            t1 = prog.add_task(self.name, total=self.member_count)                
+            t1 = prog.add_task(self.name, total=self.member_count)   
             while len(entries) > 2:
                 for entry in entries:
                     content = entry['content']
                     if content['entryType'] == 'TimelineTimelineItem':
                         result = content['itemContent']['user_results']['result']
                         
-                        
-                        user.TwitterUser(result['legacy']['screen_name'], 
+                        TwitterUser(result['legacy']['screen_name'], 
                                     self.name, 
                                     result['legacy']['name'],
                                     result['rest_id']).download_all()
