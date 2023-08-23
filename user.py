@@ -12,6 +12,7 @@ import userlist
 import requests
 import time
 from datetime import datetime
+from logger import logger
 
 def handle_title(full_text: str) -> str:
     full_text = pattern.url.sub('', full_text)
@@ -39,7 +40,7 @@ class TwitterUser:
             try:
                 res.raise_for_status()
             except requests.exceptions.HTTPError as err:
-                print(repr(err))
+                logger.error(err)
 
             name = res.json()['data']['user']['result']['legacy']['name']
             rest_id = res.json()['data']['user']['result']['rest_id']
@@ -90,7 +91,7 @@ class TwitterUser:
             # 请求次数达到上限，挂起程序等待重新请求
             else:                            
                 dt = datetime.datetime.fromtimestamp(int(res.headers['x-rate-limit-reset']))            
-                print('Because reach rate-limit, wait until {}'.format(dt.strftime("%Y-%m-%d %H:%M:%S")))
+                logger.warning('Because reach rate-limit, wait until {}'.format(dt.strftime("%Y-%m-%d %H:%M:%S")))
                 second = dt.timestamp() - datetime.datetime.now().timestamp()
                 time.sleep(second)
             res = ses.get(UserMedia.api, params=params)
@@ -174,5 +175,5 @@ class TwitterUser:
                             continue
                     else:
                         break
-            print("[{}(@{}) {}/{}] {}".format(self.name, self.screen_name, i+1, len(items), item['title']))
+            logger.info("[{}(@{}) {}/{}] {}".format(self.name, self.screen_name, i+1, len(items), item['title']))
         TwitterUser.users[self.rest_id]['latest'] = self.latest

@@ -6,7 +6,7 @@ from api import ListByRestId, ListMembers
 from progress import prog
 from session import ses
 from user import TwitterUser
-
+from logger import logger
 
 class UserList:
     userlists = []
@@ -39,7 +39,7 @@ class UserList:
         with open(self.path + '\\.users.json', 'w', encoding='utf-8') as f:
             json.dump(TwitterUser.users, f, ensure_ascii=False, indent=4, separators=(',', ': '))
         TwitterUser.users.clear()
-        print('__del__')
+        logger.debug("saved {}".format(self.path + '\\.users.json'))
     
     def is_exist(self) -> bool:
         return self.rest_id in UserList.userlists
