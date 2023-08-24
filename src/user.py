@@ -12,6 +12,10 @@ import userlist
 import requests
 import time
 from datetime import datetime
+from logger import logger
+from collections import deque
+
+#TODO 日期升序下载
 
 def handle_title(full_text: str) -> str:
     full_text = pattern.url.sub('', full_text)
@@ -39,7 +43,7 @@ class TwitterUser:
             try:
                 res.raise_for_status()
             except requests.exceptions.HTTPError as err:
-                print(repr(err))
+                logger.error(err)
 
             name = res.json()['data']['user']['result']['legacy']['name']
             rest_id = res.json()['data']['user']['result']['rest_id']
@@ -56,6 +60,7 @@ class TwitterUser:
             self.update_info()
 
         self.latest = TwitterUser.users[self.rest_id]['latest']
+        self.failure = []
         pass  
 
     def is_exist(self) -> bool:
@@ -90,7 +95,7 @@ class TwitterUser:
             # 请求次数达到上限，挂起程序等待重新请求
             else:                            
                 dt = datetime.datetime.fromtimestamp(int(res.headers['x-rate-limit-reset']))            
-                print('Because reach rate-limit, wait until {}'.format(dt.strftime("%Y-%m-%d %H:%M:%S")))
+                logger.warning('Because reach rate-limit, wait until {}'.format(dt.strftime("%Y-%m-%d %H:%M:%S")))
                 second = dt.timestamp() - datetime.datetime.now().timestamp()
                 time.sleep(second)
             res = ses.get(UserMedia.api, params=params)
@@ -99,11 +104,10 @@ class TwitterUser:
             return list()
         return res.json()['data']['user']['result']['timeline_v2']['timeline']['instructions'][0]['entries']
     
-    def get_entries(self) -> list:
-        items = []
-        last = self.latest
-        if last != '':
-            latest_timestamp = datetime.strptime(last, utility.timeformat).timestamp()
+    def get_entries(self) -> deque:
+        items = deque()
+        if self.latest != '':
+            latest_timestamp = datetime.strptime(self.latest, utility.timeformat).timestamp()
         
         entries = self.get_timeline()       
         while len(entries) > 2:
@@ -120,13 +124,10 @@ class TwitterUser:
                     else:
                         legacy = result['legacy']
 
-                    if last != '':                  
+                    if self.latest != '':                  
                         if (datetime.strptime(legacy['created_at'], utility.timeformat).timestamp() <= latest_timestamp):
                             entries.clear()
                             break
-                    
-                    if len(items) == 0:
-                        self.latest = legacy['created_at']     
 
                     title = handle_title(legacy['full_text']) 
                     medias = legacy.get('extended_entities')
@@ -153,26 +154,51 @@ class TwitterUser:
                     item['title'] = title
                     item['urls'] = urls
                     item['vurls'] = vurls
-                    items.append(item)                   
+                    item['created_at'] = legacy['created_at']
+                    items.appendleft(item)
                 # 翻页   
                 elif content['entryType'] == 'TimelineTimelineCursor':
                     if content['cursorType'] == 'Bottom':   
                         entries = self.get_timeline(cursor=content['value'])  
         return items
 
+    def retry(self):
+        for i, item in enumerate(self.failure):
+            try:
+                utility.download(item['url'], False, path=self.path, name=item['title'])
+            except requests.RequestException as er:
+                print(er)
+                continue
+            else:
+                print("{}(@{}) {}/{} > {}".format(self.name, self.screen_name, i+1, len(self.failure), item['title']))
+
     def download_all(self):    
-        items = self.get_entries()
-        for i, item in enumerate(items):
-            for p in item['urls']:
-                utility.download(p, False, path=self.path, name=item['title'])
-            for v in item['vurls']:
+        tweets = self.get_entries()
+        for i, tweet in enumerate(tweets):
+            for p in tweet['urls']:
+                try:
+                    utility.download(p, False, path=self.path, name=tweet['title'])
+                except requests.RequestException as ex:
+                    print(ex)
+                    self.failure.append({"title": tweet['title'], "url": p})
+                    continue
+            for v in tweet['vurls']:
                 while len(v):
                     try:
-                        utility.download(v.pop(), False, path=self.path, name=item['title']) 
+                        url = v.pop()
+                        utility.download(url, False, path=self.path, name=tweet['title']) 
                     except requests.HTTPError as err:
                         if err.response.status_code == requests.codes.NOT_FOUND:                                    
                             continue
+                    except requests.RequestException as ex:
+                        self.failure.append({"title": tweet['title'], "url": url})
+                        break
                     else:
                         break
-            print("[{}(@{}) {}/{}] {}".format(self.name, self.screen_name, i+1, len(items), item['title']))
-        TwitterUser.users[self.rest_id]['latest'] = self.latest
+            logger.info("{}(@{}) {}/{} > {}".format(self.name, self.screen_name, i+1, len(tweets), tweet['title']))
+            TwitterUser.users[self.rest_id]['latest'] = tweet['created_at']
+
+        l = len(self.failure)
+        if l > 0:
+            logger.warning(f'{self.name}(@{self.screen_name}) > failures: {l}')
+            self.retry()

@@ -17,6 +17,5 @@ def init():
         pass
 
 def uninit():
-    print('uninit')
     with open(core.path + '\\.lists.json', 'w', encoding='utf-8') as f:
         json.dump(UserList.userlists, f, ensure_ascii=False, indent=4, separators=(',', ': '))

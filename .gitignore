@@ -1,3 +1,6 @@
 __pycache__
-core.py
+src/core.py
+src/test.py
+src/test.pyw
 .vscode
+run.bat
