@@ -30,8 +30,7 @@ def get_bitrate(variant) -> int:
     return bit
 
 class TwitterUser:
-    users = {}
-    def __init__(self, screen_name: str, relative_path = '', name = None, rest_id = None) -> None:       
+    def __init__(self, screen_name: str, belong_to: dict,relative_path = '', name = None, rest_id = None) -> None:       
         # Get 'name' and 'rest_id'
         if (name or rest_id) == None:
             UserByScreenName.params['variables']['screen_name'] = screen_name
@@ -42,37 +41,42 @@ class TwitterUser:
             except requests.exceptions.HTTPError as err:
                 logger.error(err)
 
-            name = res.json()['data']['user']['result']['legacy']['name']
-            rest_id = res.json()['data']['user']['result']['rest_id']
+            if 'user' in res.json()['data']:
+                name = res.json()['data']['user']['result']['legacy']['name']
+                rest_id = res.json()['data']['user']['result']['rest_id']
+            else:
+                msg = '@{}: This account doesn’t exist'.format(screen_name)
+                logger.warning(msg)
         
         self.screen_name = screen_name
         self.name = name
         self.rest_id = rest_id
         self.title = f'{pattern.nonsupport.sub("", self.name)}({self.screen_name})'
-        self.path = core.path + f'\\{relative_path}\\{self.title}'        
+        self.path = core.path + f'\\{relative_path}\\{self.title}'       
+        self.belong_to = belong_to 
         
         if not self.is_exist():
             self.create_profile()
         else:
             self.update_info()
 
-        self.latest = TwitterUser.users[self.rest_id]['latest']
+        self.latest = self.belong_to[self.rest_id]['latest']
         self.failure = []
         pass  
 
     def is_exist(self) -> bool:
-        return self.rest_id in TwitterUser.users
+        return self.rest_id in self.belong_to
     
     def update_info(self):
-        # have changed name
-        if self.title != TwitterUser.users[self.rest_id]['names'][0]:
+        # has changed name
+        if self.title != self.belong_to[self.rest_id]['names'][0]:
             i = self.path.rfind('\\')
             os.rename(self.path[:i] + f'\\{TwitterUser.users[self.rest_id]["names"][0]}', self.path)        
-            TwitterUser.users[self.rest_id]['names'].insert(0, self.title)
+            self.belong_to[self.rest_id]['names'].insert(0, self.title)
         pass
     
     def create_profile(self):
-        TwitterUser.users[self.rest_id] = {'names': [self.title], 'latest': ''}
+        self.belong_to[self.rest_id] = {'names': [self.title], 'latest': ''}
 
         if not os.path.exists(self.path):
             os.mkdir(self.path)
@@ -191,18 +195,18 @@ class TwitterUser:
         latest = self.download_tweets(entries, True)
 
         # 判断失败列表的最新推文发布日期是否晚于已成功的推文
-        if latest != '' and TwitterUser.users[self.rest_id]['latest'] != '':
-            ts_saved = datetime.strptime(TwitterUser.users[self.rest_id]['latest'], utility.timeformat).timestamp()
+        if latest != '' and self.belong_to[self.rest_id]['latest'] != '':
+            ts_saved = datetime.strptime(self.belong_to[self.rest_id]['latest'], utility.timeformat).timestamp()
             ts_latest = datetime.strptime(latest, utility.timeformat).timestamp()
             if ts_latest  > ts_saved:
-                TwitterUser.users[self.rest_id]['latest'] = latest
+                self.belong_to[self.rest_id]['latest'] = latest
         
         for i, t in enumerate(self.failure):
             logger.error(f'{self.name}(@{self.screen_name}) > Failed to download[{i+1}]: {t["title"]}')
         
     def download_all(self):    
         latest = self.download_tweets(self.get_entries(), False)
-        TwitterUser.users[self.rest_id]['latest'] = latest
+        self.belong_to[self.rest_id]['latest'] = latest
 
         l = len(self.failure)
         if l > 0:

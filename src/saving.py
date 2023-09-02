@@ -1,7 +1,7 @@
 import json
 import core
 import os
-from userlist import UserList
+from twitter_list import TwitterList
 
 def init():
     if not os.path.exists(core.path):
@@ -13,7 +13,7 @@ def init():
             pass
     
     with open(core.path + '\\.lists.json', 'r', encoding='utf-8') as f:
-        UserList.userlists = json.load(f)
+        TwitterList.userlists = json.load(f)
         pass
     
     # single user
@@ -26,4 +26,4 @@ def init():
 
 def uninit():
     with open(core.path + '\\.lists.json', 'w', encoding='utf-8') as f:
-        json.dump(UserList.userlists, f, ensure_ascii=False, indent=4, separators=(',', ': '))
+        json.dump(TwitterList.userlists, f, ensure_ascii=False, indent=4, separators=(',', ': '))

@@ -5,29 +5,29 @@ import requests
 from api import ListByRestId, ListMembers
 from progress import prog
 from session import ses
-from user import TwitterUser
+from twitter_user import TwitterUser
 from logger import logger
 
-class UserList:
+class TwitterList:
     userlists = []
 
     def __init__(self, rest_id) -> None:
         self.rest_id = str(rest_id)
         
-        # Get info of the list
+        # Get infomation of the list
         ListByRestId.params['variables']['listId'] = self.rest_id
-        params = {k: json.dumps(v) for k, v in ListByRestId.params.items()}
-        
-        res = ses.get(ListByRestId.api, params=params)
+        params = {k: json.dumps(v) for k, v in ListByRestId.params.items()}              
         try:
+            res = ses.get(ListByRestId.api, params=params)
             res.raise_for_status()
-        except requests.exceptions.HTTPError as err:
+        except Exception as err:
             print(err)
 
         list = res.json()['data']['list']
         self.name = list['name']
         self.member_count = list['member_count']
         self.path = core.path + f'\\{self.name}'
+        self.users = {}
 
         if not self.is_exist():
             self.create_profile()
@@ -35,26 +35,25 @@ class UserList:
             self.update_info()
         
         with open(self.path + '\\.users.json',encoding='utf-8') as f:           
-            TwitterUser.users = json.load(f)
+            self.users = json.load(f)
         pass
 
     def __del__(self):
         with open(self.path + '\\.users.json', 'w', encoding='utf-8') as f:
-            json.dump(TwitterUser.users, f, ensure_ascii=False, indent=4, separators=(',', ': '))
-        TwitterUser.users.clear()
-        logger.debug("saved {}".format(self.path + '\\.users.json'))
+            json.dump(self.users, f, ensure_ascii=False, indent=4, separators=(',', ': '))
+        logger.debug("{}: saved {}".format(self.name, self.path + '\\.users.json'))
     
     def is_exist(self) -> bool:
-        return self.rest_id in UserList.userlists
+        return self.rest_id in TwitterList.userlists
 
     def update_info(self):
-        if self.name != UserList.userlists[self.rest_id]['names'][0]:
-            os.rename(core.path + f'\\{UserList.userlists[self.rest_id]["names"][0]}', self.path)
-            list(UserList.userlists[self.rest_id]["names"]).insert(0, self.name)
+        if self.name != TwitterList.userlists[self.rest_id]['names'][0]:
+            os.rename(core.path + f'\\{TwitterList.userlists[self.rest_id]["names"][0]}', self.path)
+            TwitterList.userlists[self.rest_id]["names"].insert(0, self.name)
 
 
     def create_profile(self):
-        UserList.userlists[self.rest_id] = {'names': [self.name]}
+        TwitterList.userlists[self.rest_id] = {'names': [self.name]}
         if not os.path.exists(self.path):
             os.mkdir(self.path)
         if not os.path.exists(self.path + f'\\.users.json'):
@@ -90,6 +89,7 @@ class UserList:
                         result = content['itemContent']['user_results']['result']
                         
                         TwitterUser(result['legacy']['screen_name'], 
+                                    self.users,
                                     self.name, 
                                     result['legacy']['name'],
                                     result['rest_id']).download_all()
