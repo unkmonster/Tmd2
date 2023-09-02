@@ -8,14 +8,11 @@ import core
 import os
 import pattern
 import utility
-import userlist
 import requests
 import time
 from datetime import datetime
 from logger import logger
 from collections import deque
-
-#TODO 日期升序下载
 
 def handle_title(full_text: str) -> str:
     full_text = pattern.url.sub('', full_text)
@@ -162,43 +159,52 @@ class TwitterUser:
                         entries = self.get_timeline(cursor=content['value'])  
         return items
 
-    def retry(self):
-        for i, item in enumerate(self.failure):
+    def download_tweets(self, entries, overwrite: bool) -> str:
+        created_at = self.latest
+
+        for i, tweet in enumerate(entries):
             try:
-                utility.download(item['url'], False, path=self.path, name=item['title'])
-            except requests.RequestException as er:
-                print(er)
+                for p in tweet['urls']:
+                    utility.download(p, overwrite, path=self.path, name=tweet['title'])
+
+                for v in tweet['vurls']:
+                    while len(v):
+                        try:
+                            utility.download(v.pop(), overwrite, path=self.path, name=tweet['title']) 
+                        except requests.HTTPError as err:
+                            if err.response.status_code == requests.codes.NOT_FOUND:                                    
+                                continue
+                        else:
+                            break
+            except requests.RequestException as ex:
+                self.failure.append(tweet)
+                logger.error('Failed to download: {}'.format(repr(ex)))
                 continue
             else:
-                print("{}(@{}) {}/{} > {}".format(self.name, self.screen_name, i+1, len(self.failure), item['title']))
+                logger.info("{}(@{}) {}/{} > {}".format(self.name, self.screen_name, i+1, len(entries), tweet['title']))
+                created_at = tweet['created_at']
+        return created_at
 
+    def retry(self):
+        entries = self.failure
+        self.failure.clear()
+        latest = self.download_tweets(entries, True)
+
+        # 判断失败列表的最新推文发布日期是否晚于已成功的推文
+        if latest != '' and TwitterUser.users[self.rest_id]['latest'] != '':
+            ts_saved = datetime.strptime(TwitterUser.users[self.rest_id]['latest'], utility.timeformat).timestamp()
+            ts_latest = datetime.strptime(latest, utility.timeformat).timestamp()
+            if ts_latest  > ts_saved:
+                TwitterUser.users[self.rest_id]['latest'] = latest
+        
+        for i, t in enumerate(self.failure):
+            logger.error(f'{self.name}(@{self.screen_name}) > Failed to download[{i+1}]: {t["title"]}')
+        
     def download_all(self):    
-        tweets = self.get_entries()
-        for i, tweet in enumerate(tweets):
-            for p in tweet['urls']:
-                try:
-                    utility.download(p, False, path=self.path, name=tweet['title'])
-                except requests.RequestException as ex:
-                    print(ex)
-                    self.failure.append({"title": tweet['title'], "url": p})
-                    continue
-            for v in tweet['vurls']:
-                while len(v):
-                    try:
-                        url = v.pop()
-                        utility.download(url, False, path=self.path, name=tweet['title']) 
-                    except requests.HTTPError as err:
-                        if err.response.status_code == requests.codes.NOT_FOUND:                                    
-                            continue
-                    except requests.RequestException as ex:
-                        self.failure.append({"title": tweet['title'], "url": url})
-                        break
-                    else:
-                        break
-            logger.info("{}(@{}) {}/{} > {}".format(self.name, self.screen_name, i+1, len(tweets), tweet['title']))
-            TwitterUser.users[self.rest_id]['latest'] = tweet['created_at']
+        latest = self.download_tweets(self.get_entries(), False)
+        TwitterUser.users[self.rest_id]['latest'] = latest
 
         l = len(self.failure)
         if l > 0:
-            logger.warning(f'{self.name}(@{self.screen_name}) > failures: {l}')
+            logger.debug(f'{self.name}(@{self.screen_name}) > failures: {l}')
             self.retry()
