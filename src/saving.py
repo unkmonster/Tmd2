@@ -15,6 +15,14 @@ def init():
     with open(core.path + '\\.lists.json', 'r', encoding='utf-8') as f:
         UserList.userlists = json.load(f)
         pass
+    
+    # single user
+    path = core.path + '\\other'
+    if not os.path.exists(path):
+        os.mkdir(path)
+    if not os.path.exists(path + '\\.users.json'):
+        with open(path + '\\.users.json', 'w', encoding='utf-8') as f:
+            json.dump(dict(), f)
 
 def uninit():
     with open(core.path + '\\.lists.json', 'w', encoding='utf-8') as f:
