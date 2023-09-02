@@ -30,23 +30,27 @@ def get_bitrate(variant) -> int:
     return bit
 
 class TwitterUser:
-    def __init__(self, screen_name: str, belong_to: dict,relative_path = '', name = None, rest_id = None) -> None:       
+    def __init__(self, screen_name: str, belong_to: dict = None,relative_path = '', name = None, rest_id = None) -> None:       
+        self.external = False
+
         # Get 'name' and 'rest_id'
         if (name or rest_id) == None:
-            UserByScreenName.params['variables']['screen_name'] = screen_name
-            params = {k: json.dumps(v) for k, v in UserByScreenName.params.items()}
-            res = ses.get(UserByScreenName.api, params=params)
+            UserByScreenName.params['variables']['screen_name'] = screen_name           
             try:
+                res = ses.get(UserByScreenName.api, json=UserByScreenName.params)
                 res.raise_for_status()
-            except requests.exceptions.HTTPError as err:
-                logger.error(err)
+            except:
+                logger.error(res)
+                raise
 
             if 'user' in res.json()['data']:
+                result = res.json()['data']['user']['result']
+                if 'UserUnavailable' == result['__typename']:
+                    raise RuntimeError(screen_name, 'UserUnavailable')
                 name = res.json()['data']['user']['result']['legacy']['name']
                 rest_id = res.json()['data']['user']['result']['rest_id']
             else:
-                msg = '@{}: This account doesn’t exist'.format(screen_name)
-                logger.warning(msg)
+                raise RuntimeError(screen_name, "Account doesn't exist")
         
         self.screen_name = screen_name
         self.name = name
@@ -54,17 +58,18 @@ class TwitterUser:
         self.title = f'{pattern.nonsupport.sub("", self.name)}({self.screen_name})'
         self.path = core.path + f'\\{relative_path}\\{self.title}'       
         self.belong_to = belong_to 
-        self.external = False
-        
-        if not self.is_exist():
-            self.create_profile()
-        else:
-            self.update_info()
-        
+        self.latest = ''
+
+        # TODO
+        if self.belong_to != None:
+            if not self.is_exist():
+                self.create_profile()
+            else:
+                self.update_info()
+            
         if self.external:
             utility.create_shortcut(self.path, core.path + f'\\{relative_path}')
 
-        self.latest = self.belong_to[self.rest_id]['latest']
         self.failure = []
         pass  
     
@@ -78,20 +83,16 @@ class TwitterUser:
     def is_exist(self) -> bool:
         if self.rest_id in self.belong_to:
             return True
-        else:             
-            dirs = os.listdir(core.path) 
-            for i, dir in enumerate(dirs):
-                if dir.find('.') != -1:
-                    del dirs[i]
-
-            for dir in dirs:
-                with open(core.path + '\\' + dir + '\\.users.json', encoding='utf-8') as f:
-                    users = json.load(f)
-                    if self.rest_id in users:
-                        self.external = True
-                        self.path = core.path + f'\\{dir}\\{self.title}'
-                        self.belong_to = users
-                        return True
+        else:    
+            with open(os.path.join(core.path, '.lists.json'), encoding='utf-8') as f:
+                for v in json.load(f).values():
+                    with open(core.path + '\\' + v['names'][0] + '\\.users.json', encoding='utf-8') as f:
+                        users = json.load(f)
+                        if self.rest_id in users:
+                            self.external = True
+                            self.path = core.path + f'\\{v["names"][0]}\\{self.title}'
+                            self.belong_to = users
+                            return True
         return False
     
     def update_info(self):
@@ -100,6 +101,8 @@ class TwitterUser:
             i = self.path.rfind('\\')
             os.rename(self.path[:i] + f'\\{self.belong_to[self.rest_id]["names"][0]}', self.path)        
             self.belong_to[self.rest_id]['names'].insert(0, self.title)
+
+        self.latest = self.belong_to[self.rest_id]['latest']
         pass
     
     def create_profile(self):

@@ -45,7 +45,7 @@ class TwitterList:
     def __del__(self):
         with open(self.path + '\\.users.json', 'w', encoding='utf-8') as f:
             json.dump(self.users, f, ensure_ascii=False, indent=4, separators=(',', ': '))
-        logger.debug("{}: saved {}".format(self.name, self.path + '\\.users.json'))
+        #logger.debug("saved {}".format(self.path + '\\.users.json'))
     
     def is_exist(self) -> bool:
         return self.rest_id in TwitterList.userlists
@@ -90,12 +90,14 @@ class TwitterList:
                 content = entry['content']
                 if content['entryType'] == 'TimelineTimelineItem':
                     result = content['itemContent']['user_results']['result']
-                    
-                    TwitterUser(result['legacy']['screen_name'], 
-                                self.users,
-                                self.name, 
-                                result['legacy']['name'],
-                                result['rest_id']).download_all()
+                    try:
+                        TwitterUser(result['legacy']['screen_name'], 
+                                    self.users,
+                                    self.name, 
+                                    result['legacy']['name'],
+                                    result['rest_id']).download_all()
+                    except requests.HTTPError:
+                        continue
                     prog.advance(t1)
                 elif content['entryType'] == 'TimelineTimelineCursor':
                     if content['cursorType'] == 'Bottom':

@@ -153,3 +153,39 @@ class ListManagementPageTimeline:
             "responsive_web_enhance_cards_enabled":False
         }
     )
+
+class ListAddMember:
+    api = "https://twitter.com/i/api/graphql/gof0_Modm4n97yo7bGPjlA/ListAddMember"
+
+    params = { 
+        "variables": {
+            "listId": "1697999558675198460",
+            "userId": "1648332490690678785"
+        },
+        "features": {
+            "rweb_lists_timeline_redesign_enabled": True,
+            "responsive_web_graphql_exclude_directive_enabled": True,
+            "verified_phone_label_enabled": False,
+            "responsive_web_graphql_skip_user_profile_image_extensions_enabled": False,
+            "responsive_web_graphql_timeline_navigation_enabled": True
+        },
+        "queryId": "gof0_Modm4n97yo7bGPjlA"
+}
+    
+class ListRemoveMember:
+    api = 'https://twitter.com/i/api/graphql/yvfoG991IAuumH847Z0ypw/ListRemoveMember'
+
+    params = {
+        "variables": {
+        "listId": "1560060739372535809",
+        "userId": "1648332490690678785"
+        },
+        "features": {
+            "rweb_lists_timeline_redesign_enabled": True,
+            "responsive_web_graphql_exclude_directive_enabled": True,
+            "verified_phone_label_enabled": False,
+            "responsive_web_graphql_skip_user_profile_image_extensions_enabled": False,
+            "responsive_web_graphql_timeline_navigation_enabled": True
+        },
+        "queryId": "yvfoG991IAuumH847Z0ypw"
+}

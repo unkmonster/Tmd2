@@ -7,6 +7,10 @@ from twitter_user import TwitterUser
 import core
 import json
 import os
+from api import ListAddMember
+from api import ListRemoveMember
+import shutil
+from requests import HTTPError
 
 class Manager:
     def __init__(self) -> None:
@@ -76,7 +80,10 @@ class Manager:
                 del temp
 
             for i in screen_name:
-                TwitterUser(i, users, 'other').download_all()
+                try:
+                    TwitterUser(i, users, 'other').download_all()
+                except HTTPError:
+                    continue
         finally:
             with open(path + '\\.users.json', 'w', encoding='utf-8') as f:
                 json.dump(users, f, ensure_ascii=False, indent=4, separators=(',', ': '))
@@ -85,3 +92,39 @@ class Manager:
     def download_all_list(self):
         for list in self.get_lists():
             TwitterList(list['id_str'], list['name'], list['member_count']).download_all()
+
+    def download_following(self):
+        # TODO
+        pass
+
+    def move_user(self, screen_name: str, src_id: str, dst_id: str):
+        try:
+            user = TwitterUser(screen_name)
+        except RuntimeError as ex:
+            msg = ex.args[0] + ': ' + ex.args[1]    
+            logger.error(msg)
+            return
+        except HTTPError:
+            return
+       
+        ListAddMember.params['variables']['userId'] = ListRemoveMember.params['variables']['userId'] = user.rest_id    
+        ListAddMember.params['variables']['listId'] = dst_id
+        ListRemoveMember.params['variables']['listId'] = src_id
+        
+        try:
+            r = ses.post(ListRemoveMember.api, json=ListRemoveMember.params)
+            r.raise_for_status()
+            r = ses.post(ListAddMember.api, json=ListAddMember.params)
+            r.raise_for_status()
+        except:
+            logger.error(r.content)
+            return
+
+        # json
+        src = TwitterList(src_id)
+        dst = TwitterList(dst_id)
+        dst.users[user.rest_id] = src.users[user.rest_id]
+        del src.users[user.rest_id]
+
+        # file
+        logger.debug(shutil.move(os.path.join(src.path, user.title), dst.path))
