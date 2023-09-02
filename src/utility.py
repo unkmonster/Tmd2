@@ -47,6 +47,4 @@ def create_shortcut(target: str, saveto):
     shortcut = os.path.join(saveto, name + '.lnk')
     winshell.CreateShortcut(Path=shortcut, Target=target)  
 
-
-create_shortcut(r'E:\0x0\twitter\fwt', r"E:\0x0\twitter")
 timeformat = '%a %b %d %H:%M:%S %z %Y'

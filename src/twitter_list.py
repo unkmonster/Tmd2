@@ -9,23 +9,27 @@ from twitter_user import TwitterUser
 from logger import logger
 
 class TwitterList:
-    userlists = []
+    userlists = {}
 
-    def __init__(self, rest_id) -> None:
+    def __init__(self, rest_id, name = None, member_count = None) -> None:
         self.rest_id = str(rest_id)
         
         # Get infomation of the list
-        ListByRestId.params['variables']['listId'] = self.rest_id
-        params = {k: json.dumps(v) for k, v in ListByRestId.params.items()}              
-        try:
-            res = ses.get(ListByRestId.api, params=params)
-            res.raise_for_status()
-        except Exception as err:
-            print(err)
+        if name == None or member_count == None:
+            ListByRestId.params['variables']['listId'] = self.rest_id
+            params = {k: json.dumps(v) for k, v in ListByRestId.params.items()}              
+            try:
+                res = ses.get(ListByRestId.api, params=params)
+                res.raise_for_status()
+            except Exception as err:
+                print(err)
 
-        list = res.json()['data']['list']
-        self.name = list['name']
-        self.member_count = list['member_count']
+            list = res.json()['data']['list']
+            name = list['name']
+            member_count = list['member_count']
+
+        self.name = name
+        self.member_count = member_count
         self.path = core.path + f'\\{self.name}'
         self.users = {}
 
@@ -80,22 +84,21 @@ class TwitterList:
     
     def download_all(self):   
         entries = self.get_members()
-        with prog:
-            t1 = prog.add_task(self.name, total=self.member_count)   
-            while len(entries) > 2:
-                for entry in entries:
-                    content = entry['content']
-                    if content['entryType'] == 'TimelineTimelineItem':
-                        result = content['itemContent']['user_results']['result']
-                        
-                        TwitterUser(result['legacy']['screen_name'], 
-                                    self.users,
-                                    self.name, 
-                                    result['legacy']['name'],
-                                    result['rest_id']).download_all()
-                        prog.advance(t1)
-                    elif content['entryType'] == 'TimelineTimelineCursor':
-                        if content['cursorType'] == 'Bottom':
-                            entries = self.get_members(cursor=content['value'])
-                            break                       
+        t1 = prog.add_task(self.name, total=self.member_count)   
+        while len(entries) > 2:
+            for entry in entries:
+                content = entry['content']
+                if content['entryType'] == 'TimelineTimelineItem':
+                    result = content['itemContent']['user_results']['result']
+                    
+                    TwitterUser(result['legacy']['screen_name'], 
+                                self.users,
+                                self.name, 
+                                result['legacy']['name'],
+                                result['rest_id']).download_all()
+                    prog.advance(t1)
+                elif content['entryType'] == 'TimelineTimelineCursor':
+                    if content['cursorType'] == 'Bottom':
+                        entries = self.get_members(cursor=content['value'])
+                        break                       
     
