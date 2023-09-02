@@ -1,6 +1,7 @@
 import os
 import requests
 import time
+import winshell
 
 def download(url: str, overwrite: bool, *, path = '.', name = None, change_suffix = False) -> bool:
     res = requests.get(url, stream=True)
@@ -35,4 +36,17 @@ def get_filename_from_path(path : str) -> str:
         path = path[:i]
     return path.split('/')[-1]
 
+def create_shortcut(target: str, saveto):
+    name = target[target.rfind('\\') + 1:]
+    
+    # remove suffix
+    index = name.find('.')
+    if index != -1:
+        name = name[index+1:]
+
+    shortcut = os.path.join(saveto, name + '.lnk')
+    winshell.CreateShortcut(Path=shortcut, Target=target)  
+
+
+create_shortcut(r'E:\0x0\twitter\fwt', r"E:\0x0\twitter")
 timeformat = '%a %b %d %H:%M:%S %z %Y'

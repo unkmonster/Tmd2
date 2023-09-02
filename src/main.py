@@ -36,11 +36,11 @@ def list_download(rest_id: list | str | int):
 if __name__ == "__main__":
     saving.init()
     try:
-        # name = ['IDlucky89757']
-        # single_user_download(name)
+        name = ['taozi994', 'yueyue31415926']
+        single_user_download(name)
 
-        rid = 1560060739372535809
-        list_download(rid)
+        # rid = 1560060739372535809
+        # list_download(rid)
     except BaseException as ex:
         logger.error('Unexcepted error: {}'.format(ex))
     finally:

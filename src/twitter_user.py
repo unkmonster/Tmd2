@@ -54,24 +54,51 @@ class TwitterUser:
         self.title = f'{pattern.nonsupport.sub("", self.name)}({self.screen_name})'
         self.path = core.path + f'\\{relative_path}\\{self.title}'       
         self.belong_to = belong_to 
+        self.external = False
         
         if not self.is_exist():
             self.create_profile()
         else:
             self.update_info()
+        
+        if self.external:
+            utility.create_shortcut(self.path, core.path + f'\\{relative_path}')
 
         self.latest = self.belong_to[self.rest_id]['latest']
         self.failure = []
         pass  
+    
+    def __del__(self):
+        if self.external:
+            path = self.path[:self.path.rfind('\\')] + '\\.users.json'
+            with open(path, 'w', encoding='utf-8') as f:
+                json.dump(self.belong_to, f, ensure_ascii=False, indent=4, separators=(',', ': '))
+        pass
 
     def is_exist(self) -> bool:
-        return self.rest_id in self.belong_to
+        if self.rest_id in self.belong_to:
+            return True
+        else:             
+            dirs = os.listdir(core.path) 
+            for i, dir in enumerate(dirs):
+                if dir.find('.') != -1:
+                    del dirs[i]
+
+            for dir in dirs:
+                with open(core.path + '\\' + dir + '\\.users.json', encoding='utf-8') as f:
+                    users = json.load(f)
+                    if self.rest_id in users:
+                        self.external = True
+                        self.path = core.path + f'\\{dir}\\{self.title}'
+                        self.belong_to = users
+                        return True
+        return False
     
     def update_info(self):
         # has changed name
         if self.title != self.belong_to[self.rest_id]['names'][0]:
             i = self.path.rfind('\\')
-            os.rename(self.path[:i] + f'\\{TwitterUser.users[self.rest_id]["names"][0]}', self.path)        
+            os.rename(self.path[:i] + f'\\{self.belong_to[self.rest_id]["names"][0]}', self.path)        
             self.belong_to[self.rest_id]['names'].insert(0, self.title)
         pass
     
