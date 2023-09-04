@@ -30,49 +30,83 @@ def get_bitrate(variant) -> int:
     return bit
 
 class TwitterUser:
-    users = {}
-    def __init__(self, screen_name: str, relative_path = '', name = None, rest_id = None) -> None:       
+    def __init__(self, screen_name: str, belong_to: dict = None,relative_path = '', name = None, rest_id = None) -> None:       
+        self.external = False
+
         # Get 'name' and 'rest_id'
         if (name or rest_id) == None:
-            UserByScreenName.params['variables']['screen_name'] = screen_name
-            params = {k: json.dumps(v) for k, v in UserByScreenName.params.items()}
-            res = ses.get(UserByScreenName.api, params=params)
+            UserByScreenName.params['variables']['screen_name'] = screen_name           
             try:
+                res = ses.get(UserByScreenName.api, json=UserByScreenName.params)
                 res.raise_for_status()
-            except requests.exceptions.HTTPError as err:
-                logger.error(err)
+            except:
+                logger.error(res)
+                raise
 
-            name = res.json()['data']['user']['result']['legacy']['name']
-            rest_id = res.json()['data']['user']['result']['rest_id']
+            if 'user' in res.json()['data']:
+                result = res.json()['data']['user']['result']
+                if 'UserUnavailable' == result['__typename']:
+                    raise RuntimeError(screen_name, 'UserUnavailable')
+                name = res.json()['data']['user']['result']['legacy']['name']
+                rest_id = res.json()['data']['user']['result']['rest_id']
+            else:
+                raise RuntimeError(screen_name, "Account doesn't exist")
         
         self.screen_name = screen_name
         self.name = name
         self.rest_id = rest_id
         self.title = f'{pattern.nonsupport.sub("", self.name)}({self.screen_name})'
-        self.path = core.path + f'\\{relative_path}\\{self.title}'        
-        
-        if not self.is_exist():
-            self.create_profile()
-        else:
-            self.update_info()
+        self.path = core.path + f'\\{relative_path}\\{self.title}'       
+        self.belong_to = belong_to 
+        self.latest = ''
 
-        self.latest = TwitterUser.users[self.rest_id]['latest']
+        # TODO
+        if self.belong_to != None:
+            if not self.is_exist():
+                self.create_profile()
+            else:
+                self.update_info()
+            
+        if self.external:
+            utility.create_shortcut(self.path, core.path + f'\\{relative_path}')
+
         self.failure = []
         pass  
+    
+    def __del__(self):
+        if self.external:
+            path = self.path[:self.path.rfind('\\')] + '\\.users.json'
+            with open(path, 'w', encoding='utf-8') as f:
+                json.dump(self.belong_to, f, ensure_ascii=False, indent=4, separators=(',', ': '))
+        pass
 
     def is_exist(self) -> bool:
-        return self.rest_id in TwitterUser.users
+        if self.rest_id in self.belong_to:
+            return True
+        else:    
+            with open(os.path.join(core.path, '.lists.json'), encoding='utf-8') as f:
+                for v in json.load(f).values():
+                    with open(core.path + '\\' + v['names'][0] + '\\.users.json', encoding='utf-8') as f:
+                        users = json.load(f)
+                        if self.rest_id in users:
+                            self.external = True
+                            self.path = core.path + f'\\{v["names"][0]}\\{self.title}'
+                            self.belong_to = users
+                            return True
+        return False
     
     def update_info(self):
-        # have changed name
-        if self.title != TwitterUser.users[self.rest_id]['names'][0]:
+        # has changed name
+        if self.title != self.belong_to[self.rest_id]['names'][0]:
             i = self.path.rfind('\\')
-            os.rename(self.path[:i] + f'\\{TwitterUser.users[self.rest_id]["names"][0]}', self.path)        
-            TwitterUser.users[self.rest_id]['names'].insert(0, self.title)
+            os.rename(self.path[:i] + f'\\{self.belong_to[self.rest_id]["names"][0]}', self.path)        
+            self.belong_to[self.rest_id]['names'].insert(0, self.title)
+
+        self.latest = self.belong_to[self.rest_id]['latest']
         pass
     
     def create_profile(self):
-        TwitterUser.users[self.rest_id] = {'names': [self.title], 'latest': ''}
+        self.belong_to[self.rest_id] = {'names': [self.title], 'latest': ''}
 
         if not os.path.exists(self.path):
             os.mkdir(self.path)
@@ -191,18 +225,18 @@ class TwitterUser:
         latest = self.download_tweets(entries, True)
 
         # 判断失败列表的最新推文发布日期是否晚于已成功的推文
-        if latest != '' and TwitterUser.users[self.rest_id]['latest'] != '':
-            ts_saved = datetime.strptime(TwitterUser.users[self.rest_id]['latest'], utility.timeformat).timestamp()
+        if latest != '' and self.belong_to[self.rest_id]['latest'] != '':
+            ts_saved = datetime.strptime(self.belong_to[self.rest_id]['latest'], utility.timeformat).timestamp()
             ts_latest = datetime.strptime(latest, utility.timeformat).timestamp()
             if ts_latest  > ts_saved:
-                TwitterUser.users[self.rest_id]['latest'] = latest
+                self.belong_to[self.rest_id]['latest'] = latest
         
         for i, t in enumerate(self.failure):
             logger.error(f'{self.name}(@{self.screen_name}) > Failed to download[{i+1}]: {t["title"]}')
         
     def download_all(self):    
         latest = self.download_tweets(self.get_entries(), False)
-        TwitterUser.users[self.rest_id]['latest'] = latest
+        self.belong_to[self.rest_id]['latest'] = latest
 
         l = len(self.failure)
         if l > 0:
