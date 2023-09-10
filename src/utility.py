@@ -2,6 +2,8 @@ import os
 import requests
 import time
 import winshell
+from logger import logger
+from requests import HTTPError
 
 def download(url: str, overwrite: bool, *, path = '.', name = None, change_suffix = False) -> bool:
     res = requests.get(url, stream=True)
@@ -47,4 +49,10 @@ def create_shortcut(target: str, saveto):
     shortcut = os.path.join(saveto, name + '.lnk')
     winshell.CreateShortcut(Path=shortcut, Target=target)  
 
+def raise_if_error(response):
+    from exception import TWRequestError
+    errors = response.json().get('errors')
+    if errors != None:
+        raise TWRequestError(*errors)
+    
 timeformat = '%a %b %d %H:%M:%S %z %Y'

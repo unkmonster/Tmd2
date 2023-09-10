@@ -13,6 +13,8 @@ import time
 from datetime import datetime
 from logger import logger
 from collections import deque
+from utility import raise_if_error
+from exception import TWRequestError
 
 def handle_title(full_text: str) -> str:
     full_text = pattern.url.sub('', full_text)
@@ -38,9 +40,9 @@ class TwitterUser:
             UserByScreenName.params['variables']['screen_name'] = screen_name           
             try:
                 res = ses.get(UserByScreenName.api, json=UserByScreenName.params)
-                res.raise_for_status()
-            except:
-                logger.error(res)
+                raise_if_error(res)
+            except TWRequestError as err:
+                logger.error(err)
                 raise
 
             if 'user' in res.json()['data']:
@@ -119,17 +121,28 @@ class TwitterUser:
         UserMedia.params['variables']['cursor'] = cursor
         params = {k: json.dumps(v) for k, v in UserMedia.params.items()}
         
-        res = ses.get(UserMedia.api, params=params)     
-        if res.status_code == requests.codes.TOO_MANY:
-            if int(res.headers['x-rate-limit-remaining']) > 0:
-                switch_account()           
-            # 请求次数达到上限，挂起程序等待重新请求
-            else:                            
-                dt = datetime.datetime.fromtimestamp(int(res.headers['x-rate-limit-reset']))            
-                logger.warning('Because reach rate-limit, wait until {}'.format(dt.strftime("%Y-%m-%d %H:%M:%S")))
-                second = dt.timestamp() - datetime.datetime.now().timestamp()
-                time.sleep(second)
-            res = ses.get(UserMedia.api, params=params)
+        try:
+            res = ses.get(UserMedia.api, params=params)    
+            res.raise_for_status() 
+        except requests.HTTPError:
+            logger.error(res.text)            
+            if res.status_code == requests.codes.TOO_MANY:        
+                if int(res.headers['x-rate-limit-remaining']) > 0:
+                    raise RuntimeError('account is limited')
+                    switch_account()           
+                else:        
+                    # Reach rate limit                    
+                    limit_time = datetime.datetime.fromtimestamp(int(res.headers['x-rate-limit-reset']))            
+                    logger.warning('Because reach rate-limit, wait until {}'.format(limit_time.strftime("%Y-%m-%d %H:%M:%S")))
+                    
+                    second = limit_time.timestamp() - datetime.datetime.now().timestamp()
+                    time.sleep(second)
+                    try:
+                        res = ses.get(UserMedia.api, params=params)
+                        res.raise_for_status()
+                    except:
+                        logger.error(res.text)
+                        raise
         
         if res.json()['data']['user']['result']['__typename'] == 'UserUnavailable':
             return list()
@@ -212,7 +225,7 @@ class TwitterUser:
                             break
             except requests.RequestException as ex:
                 self.failure.append(tweet)
-                logger.error('Failed to download: {}'.format(repr(ex)))
+                logger.warning(repr(ex))
                 continue
             else:
                 logger.info("{}(@{}) {}/{} > {}".format(self.name, self.screen_name, i+1, len(entries), tweet['title']))
@@ -232,7 +245,7 @@ class TwitterUser:
                 self.belong_to[self.rest_id]['latest'] = latest
         
         for i, t in enumerate(self.failure):
-            logger.error(f'{self.name}(@{self.screen_name}) > Failed to download[{i+1}]: {t["title"]}')
+            logger.warning(f'{self.name}(@{self.screen_name}) > Failed to download[{i+1}]: {t["title"]}')
         
     def download_all(self):    
         latest = self.download_tweets(self.get_entries(), False)
@@ -240,5 +253,5 @@ class TwitterUser:
 
         l = len(self.failure)
         if l > 0:
-            logger.debug(f'{self.name}(@{self.screen_name}) > failures: {l}')
+            logger.warning(f'{self.name}(@{self.screen_name}) > failures: {l}')
             self.retry()

@@ -11,6 +11,8 @@ from api import ListAddMember
 from api import ListRemoveMember
 import shutil
 from requests import HTTPError
+from utility import raise_if_error
+from exception import TWRequestError
 
 class Manager:
     def __init__(self) -> None:
@@ -35,7 +37,8 @@ class Manager:
                 json.dump(dict(), f)
 
         # 第一账号为主账号
-        switch_account()
+        if not switch_account():
+            logger.critical('Account is invalid')
     
     def __del__(self):
         with open(core.path + '\\.lists.json', 'w', encoding='utf-8') as f:
@@ -43,10 +46,10 @@ class Manager:
 
     def get_lists(self) -> list:
         try:
-            r = ses.get(ListManagementPageTimeline.api,json=ListManagementPageTimeline.params)
+            r = ses.get(ListManagementPageTimeline.api, json=ListManagementPageTimeline.params)
             r.raise_for_status()
-        except Exception as ex:
-            logger.error(ex)
+        except:
+            logger.error(r.text)
         
         items = r.json()['data']['viewer']['list_management_timeline']['timeline']['instructions'][3]['entries'][2]['content']['items']
         results = []
@@ -128,3 +131,21 @@ class Manager:
 
         # file
         logger.debug(shutil.move(os.path.join(src.path, user.title), dst.path))
+
+    def follow_user(self, screen_name: str, user_id = 0):
+        from api import Create
+        import utility
+        from exception import TWRequestError
+
+        if user_id == 0:
+            user_id = int(TwitterUser(screen_name).rest_id)
+        Create.params['user_id'] = user_id
+        
+        res = ses.post(Create.api, data=Create.params)
+        utility.raise_if_error(res)
+ 
+    def user_to_list(self, user_id: str, list_id: str):
+        ListAddMember.params['variables']['listId'] = list_id
+        ListAddMember.params['variables']['userId'] = user_id
+        res = ses.post(ListAddMember.api, json=ListAddMember.params)
+        raise_if_error(res)
