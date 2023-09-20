@@ -5,7 +5,7 @@ import requests
 from api import ListByRestId, ListMembers
 from progress import prog
 from session import ses
-from twitter_user import TwitterUser
+from twitter.twitter_user import TwitterUser
 from logger import logger
 from utility import raise_if_error
 
@@ -64,40 +64,45 @@ class TwitterList:
                 json.dump(dict(), f)
                 pass
         
-    def get_members(self, count=50, cursor="") -> list:
+    def get_members(self) -> list:
+        members = []
         ListMembers.params['variables']['listId'] = self.rest_id
-        ListMembers.params['variables']['count'] = count
-        ListMembers.params['variables']['cursor'] = cursor
+        ListMembers.params['variables']['count'] = 200
+        ListMembers.params['variables']['cursor'] = ''
 
-        params = {k: json.dumps(v) for k, v in ListMembers.params.items()}
+        while True:    
+            res = ses.get(ListMembers.api, json=ListMembers.params)
+            raise_if_error(res)
 
-        res = ses.get(ListMembers.api, params=params)
-        raise_if_error(res)
-
-        for instruction in res.json()['data']['list']['members_timeline']['timeline']['instructions']:
-            if instruction['type'] == "TimelineAddEntries":
-                return instruction['entries']
+            for instruction in res.json()['data']['list']['members_timeline']['timeline']['instructions']:
+                if instruction['type'] == "TimelineAddEntries":
+                    if len(instruction['entries']) == 2:
+                        return members
+                    else:
+                        cursors = [instruction['entries'].pop(), instruction['entries'].pop()]
+                        members.extend(instruction['entries'])
+                        
+                        for cur in cursors:
+                            if cur['content']['cursorType'] == 'Bottom':
+                                ListMembers.params['variables']['cursor'] = cur['content']['value']
+                                break
+                    break
     
     
     def download_all(self):   
         entries = self.get_members()
         t1 = prog.add_task(self.name, total=self.member_count)   
-        while len(entries) > 2:
-            for entry in entries:
-                content = entry['content']
-                if content['entryType'] == 'TimelineTimelineItem':
-                    result = content['itemContent']['user_results']['result']
-                    try:
-                        TwitterUser(result['legacy']['screen_name'], 
-                                    self.users,
-                                    self.name, 
-                                    result['legacy']['name'],
-                                    result['rest_id']).download_all()
-                    except requests.HTTPError:
-                        continue
-                    prog.advance(t1)
-                elif content['entryType'] == 'TimelineTimelineCursor':
-                    if content['cursorType'] == 'Bottom':
-                        entries = self.get_members(cursor=content['value'])
-                        break                       
-    
+        for entry in entries:
+            content = entry['content']
+            if content['entryType'] == 'TimelineTimelineItem':
+                result = content['itemContent']['user_results']['result']
+                try:
+                    TwitterUser(result['legacy']['screen_name'], 
+                                self.users,
+                                self.name, 
+                                result['legacy']['name'],
+                                result['rest_id']).download()
+                except RuntimeError as err:
+                    logger.warning(err)
+                    continue
+                prog.advance(t1)                    

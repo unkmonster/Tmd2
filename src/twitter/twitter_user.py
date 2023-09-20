@@ -14,7 +14,7 @@ from logger import logger
 from collections import deque
 from utility import raise_if_error
 from exception import TWRequestError
-from tweet import Tweet
+from twitter.tweet import Tweet
 
 
 def handle_title(full_text: str) -> str:
@@ -183,7 +183,6 @@ class TwitterUser:
                     else:
                         medias = medias['media']
 
-                    item = Tweet()
                     urls = []
                     vurls = []
                     for m in medias:
@@ -197,11 +196,7 @@ class TwitterUser:
                                 vurls.append(vurl)
                             case _:
                                 pass
-                    item.text = title
-                    item.pic_url = urls
-                    item.vid_url = vurls
-                    item.created_at = legacy['created_at']
-                    items.appendleft(item)
+                    items.appendleft(Tweet(title, urls, vurls, legacy['created_at']))
                 # 翻页   
                 elif content['entryType'] == 'TimelineTimelineCursor':
                     if content['cursorType'] == 'Bottom':

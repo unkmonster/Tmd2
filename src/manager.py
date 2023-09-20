@@ -2,8 +2,8 @@ from api import ListManagementPageTimeline
 from api import Settings
 from session import ses
 from logger import logger
-from twitter_list import TwitterList
-from twitter_user import TwitterUser
+from twitter.twitter_list import TwitterList
+from twitter.twitter_user import TwitterUser
 import core
 import json
 import os
