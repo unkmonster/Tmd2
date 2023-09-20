@@ -1,9 +1,6 @@
 import os
 import requests
-import time
 import winshell
-from logger import logger
-from requests import HTTPError
 
 def download(url: str, overwrite: bool, *, path = '.', name = None, change_suffix = False) -> bool:
     res = requests.get(url, stream=True)
