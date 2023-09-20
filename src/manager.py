@@ -93,7 +93,7 @@ class Manager:
                 continue
         
 
-    def single_user_download(self, screen_name: list | str):
+    def download_user(self, screen_name: list | str):
         path = self.path + '\\other'
         with open(path + '\\.users.json', encoding='utf-8') as f:
             users = json.load(f)
@@ -106,8 +106,9 @@ class Manager:
 
             for i in screen_name:
                 try:
-                    TwitterUser(i, users, 'other').download_all()
-                except HTTPError:
+                    TwitterUser(i, users, 'other').download()
+                except RuntimeError as err:
+                    logger.warning('{}: {}'.format(*err.args))
                     continue
         finally:
             with open(path + '\\.users.json', 'w', encoding='utf-8') as f:

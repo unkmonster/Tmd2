@@ -36,6 +36,8 @@ def get_bitrate(variant) -> int:
 
 class TwitterUser:
     def __init__(self, screen_name: str, belong_to: dict = None, relative_path='', name=None, rest_id=None) -> None:
+        """ 账号不存在或账号被暂停，抛出RuntimeError
+        """
         self.external = False
 
         # Get 'name' and 'rest_id'
@@ -48,6 +50,8 @@ class TwitterUser:
                 result = res.json()['data']['user']['result']
                 if 'UserUnavailable' == result['__typename']:
                     raise RuntimeError(screen_name, 'UserUnavailable')
+                if 'protected' in result['legacy'] and result['legacy']['protected'] == True:
+                    raise RuntimeError(screen_name, 'These Tweets are protected')
                 name = res.json()['data']['user']['result']['legacy']['name']
                 rest_id = res.json()['data']['user']['result']['rest_id']
             else:
@@ -248,7 +252,7 @@ class TwitterUser:
             logger.warning(t.text)
 
 
-    def download_all(self):
+    def download(self):
         result = self.download_tweets(self.get_entries(), False)
         self.belong_to[self.rest_id]['latest'] = result[1]
 
