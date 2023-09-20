@@ -7,22 +7,21 @@ from progress import prog
 from session import ses
 from twitter_user import TwitterUser
 from logger import logger
+from utility import raise_if_error
 
 class TwitterList:
+    # TEMP
     userlists = {}
 
     def __init__(self, rest_id, name = None, member_count = None) -> None:
         self.rest_id = str(rest_id)
         
-        # Get infomation of the list
         if name == None or member_count == None:
+            # Get infomation of the list
             ListByRestId.params['variables']['listId'] = self.rest_id
             params = {k: json.dumps(v) for k, v in ListByRestId.params.items()}              
-            try:
-                res = ses.get(ListByRestId.api, params=params)
-                res.raise_for_status()
-            except Exception as err:
-                print(err)
+            res = ses.get(ListByRestId.api, params=params)
+            raise_if_error(res)
 
             list = res.json()['data']['list']
             name = list['name']
@@ -36,21 +35,21 @@ class TwitterList:
         if not self.is_exist():
             self.create_profile()
         else:
-            self.update_info()
+            self.update()
         
         with open(self.path + '\\.users.json',encoding='utf-8') as f:           
             self.users = json.load(f)
-        pass
+
 
     def __del__(self):
         with open(self.path + '\\.users.json', 'w', encoding='utf-8') as f:
             json.dump(self.users, f, ensure_ascii=False, indent=4, separators=(',', ': '))
-        #logger.debug("saved {}".format(self.path + '\\.users.json'))
+
     
     def is_exist(self) -> bool:
         return self.rest_id in TwitterList.userlists
 
-    def update_info(self):
+    def update(self):
         if self.name != TwitterList.userlists[self.rest_id]['names'][0]:
             os.rename(core.path + f'\\{TwitterList.userlists[self.rest_id]["names"][0]}', self.path)
             TwitterList.userlists[self.rest_id]["names"].insert(0, self.name)
@@ -73,14 +72,12 @@ class TwitterList:
         params = {k: json.dumps(v) for k, v in ListMembers.params.items()}
 
         res = ses.get(ListMembers.api, params=params)
-        try:
-            res.raise_for_status()
-        except requests.exceptions.HTTPError as err:
-            print(err)
+        raise_if_error(res)
 
         for instruction in res.json()['data']['list']['members_timeline']['timeline']['instructions']:
             if instruction['type'] == "TimelineAddEntries":
                 return instruction['entries']
+    
     
     def download_all(self):   
         entries = self.get_members()
