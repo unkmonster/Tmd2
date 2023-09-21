@@ -89,7 +89,8 @@ class TwitterList:
                     break
     
     
-    def download_all(self):   
+    def download_all(self):
+        from exception import TWRequestError, TwUserError
         entries = self.get_members()
         t1 = prog.add_task(self.name, total=self.member_count)   
         for entry in entries:
@@ -102,7 +103,8 @@ class TwitterList:
                                 self.name, 
                                 result['legacy']['name'],
                                 result['rest_id']).download()
-                except RuntimeError as err:
-                    logger.warning(err)
-                    continue
+                except TWRequestError as err:
+                    logger.warning(err.msg())
+                except TwUserError as err:
+                    logger.warning(err.fmt_msg())
                 prog.advance(t1)                    

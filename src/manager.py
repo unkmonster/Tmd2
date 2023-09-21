@@ -12,7 +12,7 @@ from api import ListRemoveMember
 import shutil
 from requests import HTTPError
 from utility import raise_if_error
-from exception import TWRequestError
+from exception import *
 
 class Manager:
     def __init__(self, path: str) -> None:
@@ -86,12 +86,8 @@ class Manager:
             del temp
 
         for r in rest_id:
-            try:
-                TwitterList(r).download_all()
-            except TWRequestError as err:
-                logger.warning(err)
-                continue
-        
+            TwitterList(r).download_all()
+
 
     def download_user(self, screen_name: list | str):
         path = self.path + '\\other'
@@ -107,8 +103,8 @@ class Manager:
             for i in screen_name:
                 try:
                     TwitterUser(i, users, 'other').download()
-                except RuntimeError as err:
-                    logger.warning('{}: {}'.format(*err.args))
+                except TwUserError as err:
+                    logger.warning(err.fmt_msg())
                     continue
         finally:
             with open(path + '\\.users.json', 'w', encoding='utf-8') as f:
@@ -126,9 +122,8 @@ class Manager:
     def move_user(self, screen_name: str, src_id: str, dst_id: str):
         try:
             user = TwitterUser(screen_name)
-        except RuntimeError as ex:
-            msg = ex.args[0] + ': ' + ex.args[1]    
-            logger.error(msg)
+        except TwUserError as ex:
+            logger.warning(ex.fmt_msg())
             return
         except HTTPError:
             return

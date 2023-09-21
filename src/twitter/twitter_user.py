@@ -1,20 +1,20 @@
-from api import UserMedia
-from api import UserByScreenName
-from session import ses
 import json
-import pattern
-import core
 import os
+import time
+from collections import deque
+from datetime import datetime
+
+import requests
+
+import core
 import pattern
 import utility
-import requests
-import time
-from datetime import datetime
+from api import UserByScreenName, UserMedia
+from exception import TWRequestError, TwUserError
 from logger import logger
-from collections import deque
-from utility import raise_if_error
-from exception import TWRequestError
+from session import ses
 from twitter.tweet import Tweet
+from utility import raise_if_error
 
 
 def handle_title(full_text: str) -> str:
@@ -49,13 +49,13 @@ class TwitterUser:
             if 'user' in res.json()['data']:
                 result = res.json()['data']['user']['result']
                 if 'UserUnavailable' == result['__typename']:
-                    raise RuntimeError(screen_name, 'UserUnavailable')
+                    raise TwUserError(self, 'UserUnavailable')
                 if 'protected' in result['legacy'] and result['legacy']['protected'] == True:
-                    raise RuntimeError(screen_name, 'These Tweets are protected')
+                    raise TwUserError(self, 'These Tweets are protected')
                 name = res.json()['data']['user']['result']['legacy']['name']
                 rest_id = res.json()['data']['user']['result']['rest_id']
             else:
-                raise RuntimeError(screen_name, "Account doesn't exist")
+                raise TwUserError(screen_name, "Account doesn't exist")
 
         self.screen_name = screen_name
         self.name = name
@@ -80,12 +80,14 @@ class TwitterUser:
         self.failures = []
         pass
 
+
     def __del__(self):
         if self.external:
             path = self.path[:self.path.rfind('\\')] + '\\.users.json'
             with open(path, 'w', encoding='utf-8') as f:
                 json.dump(self.belong_to, f, ensure_ascii=False, indent=4, separators=(',', ': '))
         pass
+
 
     def is_exist(self) -> bool:
         if self.rest_id in self.belong_to:
@@ -102,6 +104,7 @@ class TwitterUser:
                             return True
         return False
 
+
     def update(self):
         # has changed name
         if self.title != self.belong_to[self.rest_id]['names'][0]:
@@ -112,11 +115,13 @@ class TwitterUser:
         self.latest = self.belong_to[self.rest_id]['latest']
         pass
 
+
     def create_profile(self):
         self.belong_to[self.rest_id] = {'names': [self.title], 'latest': ''}
 
         if not os.path.exists(self.path):
             os.mkdir(self.path)
+
 
     def get_timeline(self, count=50, cursor="") -> list:
         """返回时间线上的所有推文(list)
@@ -133,7 +138,7 @@ class TwitterUser:
             #logger.error(res.text)
             if res.status_code == requests.codes.TOO_MANY:
                 if int(res.headers['x-rate-limit-remaining']) > 0:
-                    raise RuntimeError('account is limited')
+                    raise RuntimeError('Reached rate-limit')
                 else:
                     # Reach rate limit                    
                     limit_time = datetime.datetime.fromtimestamp(int(res.headers['x-rate-limit-reset']))
@@ -144,10 +149,11 @@ class TwitterUser:
                     time.sleep(second)
                     res = ses.get(UserMedia.api, params=params)
                     raise_if_error(res)
-
+            raise
         if res.json()['data']['user']['result']['__typename'] == 'UserUnavailable':
-            return list()
+            raise TwUserError(self, 'User has been protected')
         return res.json()['data']['user']['result']['timeline_v2']['timeline']['instructions'][0]['entries']
+
 
     def get_entries(self) -> deque:
         items = deque()
@@ -227,7 +233,7 @@ class TwitterUser:
                 need_failed_created_at = True
                 continue
             else:
-                logger.info("{}(@{}) {}/{} > {}".format(self.name, self.screen_name, i + 1, len(entries), tweet.text))
+                logger.info("{} {}/{} > {}".format(self.title, i + 1, len(entries), tweet.text))
                 created_at = tweet.created_at
                 need_failed_created_at = False
         return (need_failed_created_at, created_at)
@@ -251,7 +257,5 @@ class TwitterUser:
         result = self.download_tweets(self.get_entries(), False)
         self.belong_to[self.rest_id]['latest'] = result[1]
 
-        l = len(self.failures)
-        if l > 0:
-            logger.warning(f'{self.name}(@{self.screen_name}) > failures: {l}')
+        if len(self.failures) > 0:
             self.retry(result[0])
