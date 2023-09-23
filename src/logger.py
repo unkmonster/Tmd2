@@ -56,14 +56,14 @@ sh = MyHandler(sys.stdout)
 fh = logging.FileHandler(log_path, 'a', 'utf-8')
 
 # create formatter
-formatter = logging.Formatter('%(asctime)s [%(levelname)s] %(message)s', datefmt='%Y-%m-%d %I:%M:%S')
-con_formatter = ColoredFormatter('%(asctime)s [%(levelname)s] %(message)s', datefmt='%Y-%m-%d %I:%M:%S')
+formatter = logging.Formatter('%(asctime)s [%(levelname)s] %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
+con_formatter = ColoredFormatter('%(asctime)s [%(levelname)s] %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
 
 # add formatter and filter to handler
 sh.setFormatter(con_formatter)
 fh.setFormatter(formatter)
 
-fh.addFilter(lambda record: record.levelno >= logging.WARNING or record.levelno == logging.DEBUG)
+fh.addFilter(lambda record: record.levelno >= logging.INFO)
 
 # add handler to 
 logger.addHandler(fh)
