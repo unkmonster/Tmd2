@@ -44,6 +44,7 @@ class TwitterList:
     def __del__(self):
         with open(self.path + '\\.users.json', 'w', encoding='utf-8') as f:
             json.dump(self.users, f, ensure_ascii=False, indent=4, separators=(',', ': '))
+        logger.info("Saved {}".format(os.path.join(self.path, '.users.json')))
 
     
     def is_exist(self) -> bool:

@@ -106,12 +106,12 @@ class TwitterUser:
 
 
     def update(self):
-        # has changed name
         if self.title != self.belong_to[self.rest_id]['names'][0]:
-            i = self.path.rfind('\\')
-            os.rename(self.path[:i] + f'\\{self.belong_to[self.rest_id]["names"][0]}', self.path)
+            root = self.path[:self.path.rfind('\\')]    
+            os.rename(os.path.join(root, self.belong_to[self.rest_id]["names"][0]), self.path)
             self.belong_to[self.rest_id]['names'].insert(0, self.title)
-
+            logger.info('Renamed: {} -> {}'.format(self.belong_to[self.rest_id]["names"][1], 
+                                                  self.belong_to[self.rest_id]["names"][0]))
         self.latest = self.belong_to[self.rest_id]['latest']
         pass
 
@@ -134,11 +134,10 @@ class TwitterUser:
         try:
             res = ses.get(UserMedia.api, params=params)
             raise_if_error(res)
-        except TWRequestError:
-            #logger.error(res.text)
+        except TWRequestError as er:
             if res.status_code == requests.codes.TOO_MANY:
                 if int(res.headers['x-rate-limit-remaining']) > 0:
-                    raise RuntimeError('Reached rate-limit')
+                    raise RuntimeError(er.msg())
                 else:
                     # Reach rate limit                    
                     limit_time = datetime.datetime.fromtimestamp(int(res.headers['x-rate-limit-reset']))
@@ -150,9 +149,12 @@ class TwitterUser:
                     res = ses.get(UserMedia.api, params=params)
                     raise_if_error(res)
             raise
-        if res.json()['data']['user']['result']['__typename'] == 'UserUnavailable':
-            raise TwUserError(self, 'User has been protected')
-        return res.json()['data']['user']['result']['timeline_v2']['timeline']['instructions'][0]['entries']
+        try:
+            if res.json()['data']['user']['result']['__typename'] == 'UserUnavailable':
+                raise TwUserError(self, 'User has been protected')
+            return res.json()['data']['user']['result']['timeline_v2']['timeline']['instructions'][0]['entries']
+        except KeyError:
+            raise TwUserError(self, 'UserUnavailable')
 
 
     def get_entries(self) -> deque:
@@ -233,7 +235,7 @@ class TwitterUser:
                 need_failed_created_at = True
                 continue
             else:
-                logger.info("{} {}/{} > {}".format(self.title, i + 1, len(entries), tweet.text))
+                logger.debug("{} {}/{} > {}".format(self.title, i + 1, len(entries), tweet.text))
                 created_at = tweet.created_at
                 need_failed_created_at = False
         return (need_failed_created_at, created_at)
