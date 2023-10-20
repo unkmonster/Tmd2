@@ -1,26 +1,20 @@
 import json
 import os
-import core
-import requests
-from api import ListByRestId, ListMembers
-from api import Create
-from progress import prog
-from session import ses
-from logger import logger
-from utility import raise_if_error
+from api import ListByRestId, ListMembers, Create
+
+from utils.logger import logger
+from utils.utility import raise_if_error
+from src.session import session
+from src.settings import *
 
 class TwitterList:
-    # TEMP
-    userlists = {}
-
     def __init__(self, rest_id, name = None, member_count = None) -> None:
         self.rest_id = str(rest_id)
         
         if name == None or member_count == None:
-            # Get infomation of the list
             ListByRestId.params['variables']['listId'] = self.rest_id
             params = {k: json.dumps(v) for k, v in ListByRestId.params.items()}              
-            res = ses.get(ListByRestId.api, params=params)
+            res = session.get(ListByRestId.api, params=params)
             raise_if_error(res)
 
             list = res.json()['data']['list']
@@ -29,41 +23,51 @@ class TwitterList:
 
         self.name = name
         self.member_count = member_count
-        self.path = core.path + f'\\{self.name}'
+        self.path = config.store_dir.joinpath(self.name)
+
+        self.usermap_dir = project.list_dir.joinpath('{}.json'.format(self.rest_id))
         self.users = {}
+        """用户信息字典"""
+
 
         if not self.is_exist():
             self.create_profile()
         else:
             self.update()
-        
-        with open(self.path + '\\.users.json',encoding='utf-8') as f:           
-            self.users = json.load(f)
+    
+        self.users = json.loads(self.usermap_dir.read_text('utf-8'))
 
 
     def __del__(self):
-        with open(self.path + '\\.users.json', 'w', encoding='utf-8') as f:
-            json.dump(self.users, f, ensure_ascii=False, indent=4, separators=(',', ': '))
-        logger.debug("Saved {}".format(os.path.join(self.path, '.users.json')))
+        self.usermap_dir.write_text(json.dumps(self.users, ensure_ascii=False, indent=4, separators=(',', ': ')), 'utf-8')
+        #logger.debug("Saved {}".format(os.path.join(self.path, '.users.json')))
 
     
     def is_exist(self) -> bool:
-        return self.rest_id in TwitterList.userlists
+        return self.rest_id in json.loads(project.listj_dir.read_text('utf-8'))
+
 
     def update(self):
-        if self.name != TwitterList.userlists[self.rest_id]['names'][0]:
-            os.rename(core.path + f'\\{TwitterList.userlists[self.rest_id]["names"][0]}', self.path)
-            TwitterList.userlists[self.rest_id]["names"].insert(0, self.name)
+        listmap = json.loads(project.listj_dir.read_text('utf-8'))
+        if self.name != listmap[self.rest_id]['names'][0]:
+            config.store_dir.joinpath(listmap[self.rest_id]['names'][0]).rename(self.path)
+            listmap[self.rest_id]["names"].insert(0, self.name)
+            project.listj_dir.write_text(json.dumps(listmap, ensure_ascii=False, indent=4, separators=(',', ': ')), 'utf-8')
 
 
     def create_profile(self):
-        TwitterList.userlists[self.rest_id] = {'names': [self.name]}
-        if not os.path.exists(self.path):
-            os.mkdir(self.path)
-        if not os.path.exists(self.path + f'\\.users.json'):
-            with open(self.path + f'\\.users.json', 'w', encoding='utf-8') as f:
-                json.dump(dict(), f)
-                pass
+        listmap = json.loads(project.listj_dir.read_text('utf-8'))
+        listmap[self.rest_id] = {
+            'names': [self.name]
+        }
+        project.listj_dir.write_text(json.dumps(listmap, ensure_ascii=False, indent=4, separators=(',', ': ')), 'utf-8')
+
+        if not self.path.exists():
+            self.path.mkdir()
+        
+        # 以 rest_id 为文件名创建当前列表的 'users.json'
+        if not self.usermap_dir.exists():
+            self.usermap_dir.write_text(json.dumps(dict()))
     
 
     def user_exist(self, rest_id)->bool:
@@ -77,7 +81,7 @@ class TwitterList:
         ListMembers.params['variables']['cursor'] = ''
 
         while True:    
-            res = ses.get(ListMembers.api, json=ListMembers.params)
+            res = session.get(ListMembers.api, json=ListMembers.params)
             raise_if_error(res)
 
             for instruction in res.json()['data']['list']['members_timeline']['timeline']['instructions']:
@@ -95,16 +99,18 @@ class TwitterList:
                     break
     
     
-    def download_all(self):
-        from twitter.twitter_user import TwitterUser
-        from exception import TWRequestError, TwUserError
-        from manager import Manager
+    def download(self):
+        from user import TwitterUser
+        from utils.exception import TWRequestError, TwUserError
+        
         entries = self.get_members()
-        t1 = prog.add_task(self.name, total=self.member_count)   
+        count = 1
+        #t1 = prog.add_task(self.name, total=self.member_count)   
         for entry in entries:
             content = entry['content']
             if content['entryType'] == 'TimelineTimelineItem':
                 result = content['itemContent']['user_results']['result']
+                os.system("title {} {}/{}".format(self.name, count, self.member_count))
                 try:
                     TwitterUser(result['legacy']['screen_name'], 
                                 self,
@@ -115,6 +121,6 @@ class TwitterList:
                 except TwUserError as err:
                     logger.warning(err.fmt_msg())
                     if err.reason == 'UserUnavailable':
-                        if Manager.follow_user(None, result['rest_id']):
-                            logger.info("have Attempted to follow the user")
-                prog.advance(t1)                    
+                        print('需要关注')
+                        pass
+                count = count + 1
