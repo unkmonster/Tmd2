@@ -10,7 +10,7 @@ class TwUserError(RuntimeError):
     
     def fmt_msg(self):
         if type(self.user) == str:
-            msg = '{} > {}'.format(self.user, self.reason)
+            msg = '{}: {}'.format(self.user, self.reason)
         else:
-            msg = '{}[{}] > {}'.format(self.user.title, self.user.rest_id, self.reason)
+            msg = '{}[{}]: {}'.format(self.user.prefix, self.user.rest_id, self.reason)
         return msg

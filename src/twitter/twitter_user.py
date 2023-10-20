@@ -2,7 +2,7 @@ import json
 import os
 import time
 from collections import deque
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 
 import requests
 
@@ -13,9 +13,8 @@ from api import UserByScreenName, UserMedia
 from exception import TWRequestError, TwUserError
 from logger import logger
 from session import ses
-from twitter.tweet import Tweet
 from utility import raise_if_error
-
+from src.utilitycpp import *
 
 def handle_title(full_text: str) -> str:
     full_text = pattern.url.sub('', full_text)
@@ -26,17 +25,10 @@ def handle_title(full_text: str) -> str:
     return full_text.strip()
 
 
-# TODO
-def get_bitrate(variant) -> int:
-    bit = variant.get('bitrate')
-    if bit == None:
-        return 0
-    return bit
-
-
 class TwitterUser:
-    def __init__(self, screen_name: str, belong_to: dict = None, relative_path='', name=None, rest_id=None) -> None:
-        """ 账号不存在或账号被暂停，抛出RuntimeError
+    from twitter.twitter_list import TwitterList
+    def __init__(self, screen_name: str, belong_to: TwitterList= None, name=None, rest_id=None) -> None:
+        """ 账号不存在或账号被暂停,或受保护账号，抛出UserError
         """
         self.external = False
 
@@ -61,66 +53,78 @@ class TwitterUser:
         self.name = name
         self.rest_id = rest_id
         self.title = f'{pattern.nonsupport.sub("", self.name)}({self.screen_name})'
-        self.path = core.path + f'\\{relative_path}\\{self.title}'
         self.belong_to = belong_to
+        self.path = os.path.join(self.belong_to.path, self.title)
         self.latest = ''
 
         # TODO
         # 目前的情况是，如果此用户隶属于某个列表，或本地列表。我们才创建为其创建配置。
         # 但没有配置的用户是无法下载的，所以此用户只用于获取信息。
         if self.belong_to != None:
-            if not self.is_exist():
-                self.create_profile()
-            else:
+            exist = self.is_exist()
+            if exist:
                 self.update()
+            self.prefix = '{}/{}'.format(self.belong_to.name, self.title)
+            if not exist:
+                self.create_profile()
+       
 
         if self.external:
-            utility.create_shortcut(self.path, core.path + f'\\{relative_path}')
-
+            utility.create_shortcut(self.path, self.origin_path)  
+        
         self.failures = []
         pass
 
 
-    def __del__(self):
-        if self.external:
-            path = self.path[:self.path.rfind('\\')] + '\\.users.json'
-            with open(path, 'w', encoding='utf-8') as f:
-                json.dump(self.belong_to, f, ensure_ascii=False, indent=4, separators=(',', ': '))
-        pass
+    # def __del__(self):
+    #     if self.external:
+    #         path = os.path.join(self.belong_to.path, '.users.json')
+    #         with open(path, 'w', encoding='utf-8') as f:
+    #             json.dump(self.belong_to.users, f, ensure_ascii=False, indent=4, separators=(',', ': '))
+    #     pass
 
 
     def is_exist(self) -> bool:
-        if self.rest_id in self.belong_to:
+        if self.belong_to.user_exist(self.rest_id):
             return True
         else:
+            # 判断此用户是否已存在于本地其他列表
+            from twitter.twitter_list import TwitterList
             with open(os.path.join(core.path, '.lists.json'), encoding='utf-8') as f:
-                for v in json.load(f).values():
-                    with open(core.path + '\\' + v['names'][0] + '\\.users.json', encoding='utf-8') as f:
-                        users = json.load(f)
-                        if self.rest_id in users:
+                lists = json.load(f)
+                del lists[self.belong_to.rest_id]
+                for k in lists:
+                    if k != '-1':
+                        tl = TwitterList(k)
+                        if tl.user_exist(self.rest_id):
                             self.external = True
-                            self.path = core.path + f'\\{v["names"][0]}\\{self.title}'
-                            self.belong_to = users
+                            self.origin_path = self.belong_to.path
+                            self.belong_to = tl
+                            self.path = os.path.join(self.belong_to.path, self.title)
                             return True
         return False
 
 
     def update(self):
-        if self.title != self.belong_to[self.rest_id]['names'][0]:
+        if self.title != self.belong_to.users[self.rest_id]['names'][0]:
             root = self.path[:self.path.rfind('\\')]    
-            os.rename(os.path.join(root, self.belong_to[self.rest_id]["names"][0]), self.path)
-            self.belong_to[self.rest_id]['names'].insert(0, self.title)
-            logger.info('Renamed: {} -> {}'.format(self.belong_to[self.rest_id]["names"][1], 
-                                                  self.belong_to[self.rest_id]["names"][0]))
-        self.latest = self.belong_to[self.rest_id]['latest']
+            os.rename(os.path.join(root, self.belong_to.users[self.rest_id]["names"][0]), self.path)
+            self.belong_to.users[self.rest_id]['names'].insert(0, self.title)
+            logger.info('Renamed: {} -> {}'.format(self.belong_to.users[self.rest_id]["names"][1], 
+                                                  self.belong_to.users[self.rest_id]["names"][0]))
+        self.latest = self.belong_to.users[self.rest_id]['latest']
         pass
 
 
     def create_profile(self):
-        self.belong_to[self.rest_id] = {'names': [self.title], 'latest': ''}
+        self.belong_to.users[self.rest_id] = {
+            'names': [self.title], 
+            'latest': ''
+        }
 
         if not os.path.exists(self.path):
             os.mkdir(self.path)
+        logger.info('Created {}'.format(self.prefix))
 
 
     def get_timeline(self, count=50, cursor="") -> list:
@@ -137,18 +141,21 @@ class TwitterUser:
         except TWRequestError as er:
             if res.status_code == requests.codes.TOO_MANY:
                 if int(res.headers['x-rate-limit-remaining']) > 0:
-                    raise RuntimeError(er.msg())
-                else:
-                    # Reach rate limit                    
+                    from manager import Manager
+                    if Manager.spare.empty():
+                        raise RuntimeError(er.msg())
+                    Manager.login()
+                else:                
                     limit_time = datetime.datetime.fromtimestamp(int(res.headers['x-rate-limit-reset']))
                     logger.warning(
                         'Reached rate-limit, have been waiting until {}'.format(limit_time.strftime("%Y-%m-%d %H:%M:%S")))
 
-                    second = limit_time.timestamp() - datetime.datetime.now().timestamp()
-                    time.sleep(second)
-                    res = ses.get(UserMedia.api, params=params)
-                    raise_if_error(res)
-            raise
+                    time.sleep(limit_time.timestamp() - datetime.datetime.now().timestamp())
+
+                res = ses.get(UserMedia.api, params=params)
+                raise_if_error(res)
+            else:
+                raise
         try:
             if res.json()['data']['user']['result']['__typename'] == 'UserUnavailable':
                 raise TwUserError(self, 'User has been protected')
@@ -158,7 +165,17 @@ class TwitterUser:
 
 
     def get_entries(self) -> deque:
-        items = deque()
+        def max_bitrate(variants)->str:
+            max = [0, '']
+            for v in variants:
+                br = int(v.get("bitrate") or 0)
+                if br > max[0]:
+                    max[0] = br
+                    max[1] = v['url']
+            return max[1]
+        
+        
+        items = []
         if self.latest != '':
             latest_timestamp = datetime.strptime(self.latest, utility.timeformat).timestamp()
 
@@ -169,8 +186,8 @@ class TwitterUser:
                 content = entry['content']
 
                 if content['entryType'] == 'TimelineTimelineItem':
-                    result = dict(content['itemContent']['tweet_results']).get('result')
-                    if result == None:
+                    result = content['itemContent']['tweet_results'].get('result')
+                    if result == None or result['__typename'] == 'TweetTombstone':
                         continue
                     if result['__typename'] == 'TweetWithVisibilityResults':
                         legacy = result['tweet']['legacy']
@@ -192,19 +209,17 @@ class TwitterUser:
                         medias = medias['media']
 
                     urls = []
-                    vurls = []
                     for m in medias:
                         match m['type']:
                             case 'photo':
                                 urls.append(m['media_url_https'])
                             case 'video':
                                 variants = list(m['video_info']['variants'])
-                                variants.sort(key=get_bitrate)
-                                vurl = [u['url'] for u in variants]
-                                vurls.append(vurl)
+                                urls.append(max_bitrate(variants))
                             case _:
                                 pass
-                    items.appendleft(Tweet(title, urls, vurls, legacy['created_at']))
+                    items.append(Tweet(title, urls, legacy['created_at']))
+                    pass
                 # 翻页   
                 elif content['entryType'] == 'TimelineTimelineCursor':
                     if content['cursorType'] == 'Bottom':
@@ -235,7 +250,7 @@ class TwitterUser:
                 need_failed_created_at = True
                 continue
             else:
-                logger.debug("{} {}/{} > {}".format(self.title, i + 1, len(entries), tweet.text))
+                print('{} [{}/{}] {}'.format(self.prefix, i + 1, len(entries), tweet.text))
                 created_at = tweet.created_at
                 need_failed_created_at = False
         return (need_failed_created_at, created_at)
@@ -247,7 +262,7 @@ class TwitterUser:
         result = self.download_tweets(entries, True)
 
         if update_latest:
-            self.belong_to[self.rest_id]['latest'] = result[1]
+            self.belong_to.users[self.rest_id]['latest'] = result[1]
 
         if len(self.failures):
             logger.warning("There are tweets with failed downloads by {})", self.title)
@@ -256,8 +271,9 @@ class TwitterUser:
 
 
     def download(self):
-        result = self.download_tweets(self.get_entries(), False)
-        self.belong_to[self.rest_id]['latest'] = result[1]
+        entries = self.get_entries()
+        latest = cdownload(entries, self.path)
 
-        if len(self.failures) > 0:
-            self.retry(result[0])
+        #print('calc time = %dms' % int((time.time() - start) * 1000))
+        if latest:
+            self.belong_to.users[self.rest_id]['latest'] = datetime.strftime(datetime.fromtimestamp(latest, timezone(timedelta(hours=0))), utility.timeformat)

@@ -1,11 +1,6 @@
 import requests
-import core
-from api import Settings
 from urllib3.util import Retry
 from requests.adapters import HTTPAdapter
-from logger import logger
-from utility import raise_if_error
-from exception import TWRequestError
 
 ses = requests.session()
 retries = Retry(

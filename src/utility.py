@@ -29,11 +29,13 @@ def download(url: str, overwrite: bool, *, path = '.', name = None, change_suffi
         for chunk in res.iter_content(chunk_size=1024):
             f.write(chunk)
 
+
 def get_filename_from_path(path : str) -> str:
     i = path.find('?')
     if i != -1:
         path = path[:i]
     return path.split('/')[-1]
+
 
 def create_shortcut(target: str, saveto):
     name = target[target.rfind('\\') + 1:]
@@ -45,6 +47,7 @@ def create_shortcut(target: str, saveto):
 
     shortcut = os.path.join(saveto, name + '.lnk')
     winshell.CreateShortcut(Path=shortcut, Target=target)  
+
 
 def raise_if_error(response):
     from exception import TWRequestError

@@ -3,9 +3,9 @@ import os
 import core
 import requests
 from api import ListByRestId, ListMembers
+from api import Create
 from progress import prog
 from session import ses
-from twitter.twitter_user import TwitterUser
 from logger import logger
 from utility import raise_if_error
 
@@ -44,7 +44,7 @@ class TwitterList:
     def __del__(self):
         with open(self.path + '\\.users.json', 'w', encoding='utf-8') as f:
             json.dump(self.users, f, ensure_ascii=False, indent=4, separators=(',', ': '))
-        logger.info("Saved {}".format(os.path.join(self.path, '.users.json')))
+        logger.debug("Saved {}".format(os.path.join(self.path, '.users.json')))
 
     
     def is_exist(self) -> bool:
@@ -64,7 +64,12 @@ class TwitterList:
             with open(self.path + f'\\.users.json', 'w', encoding='utf-8') as f:
                 json.dump(dict(), f)
                 pass
-        
+    
+
+    def user_exist(self, rest_id)->bool:
+        return rest_id in self.users
+
+
     def get_members(self) -> list:
         members = []
         ListMembers.params['variables']['listId'] = self.rest_id
@@ -91,7 +96,9 @@ class TwitterList:
     
     
     def download_all(self):
+        from twitter.twitter_user import TwitterUser
         from exception import TWRequestError, TwUserError
+        from manager import Manager
         entries = self.get_members()
         t1 = prog.add_task(self.name, total=self.member_count)   
         for entry in entries:
@@ -100,12 +107,14 @@ class TwitterList:
                 result = content['itemContent']['user_results']['result']
                 try:
                     TwitterUser(result['legacy']['screen_name'], 
-                                self.users,
-                                self.name, 
+                                self,
                                 result['legacy']['name'],
                                 result['rest_id']).download()
                 except TWRequestError as err:
                     logger.warning(err.msg())
                 except TwUserError as err:
                     logger.warning(err.fmt_msg())
+                    if err.reason == 'UserUnavailable':
+                        if Manager.follow_user(None, result['rest_id']):
+                            logger.info("have Attempted to follow the user")
                 prog.advance(t1)                    

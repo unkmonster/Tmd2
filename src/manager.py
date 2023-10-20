@@ -13,54 +13,77 @@ import shutil
 from requests import HTTPError
 from utility import raise_if_error
 from exception import *
+from queue import Queue
 
 class Manager:
-    def __init__(self, path: str) -> None:
-        self.path = path
-        if not os.path.exists(self.path):
-            os.mkdir(self.path)
+    authorization: str
+    screen_name: str
+    spare: Queue
+
+    def init(authorization: str) -> None:
+        if not os.path.exists(core.path):
+            os.mkdir(core.path)
         
-        if not os.path.exists(self.path + '\\.lists.json'):
-            with open(self.path + '\\.lists.json', 'w', encoding='utf-8') as f:
+        if not os.path.exists(core.path + '\\.lists.json'):
+            with open(core.path + '\\.lists.json', 'w', encoding='utf-8') as f:
                 json.dump(dict(), f)
                 pass
         
         # TEMP
-        with open(self.path + '\\.lists.json', 'r', encoding='utf-8') as f:
+        with open(core.path + '\\.lists.json', 'r', encoding='utf-8') as f:
             TwitterList.userlists = json.load(f)
             pass
         
         # single user
-        path = self.path + '\\other'
+        path = core.path + '\\other'
         if not os.path.exists(path):
             os.mkdir(path)
         if not os.path.exists(path + '\\.users.json'):
             with open(path + '\\.users.json', 'w', encoding='utf-8') as f:
                 json.dump(dict(), f)
-
+        
+        Manager.authorization = authorization
+        Manager.screen_name = None
+        Manager.spare = Queue(-1)
 
     # TEMP
-    def __del__(self):
-        with open(self.path + '\\.lists.json', 'w', encoding='utf-8') as f:
+    def uninit():
+        with open(core.path + '\\.lists.json', 'w', encoding='utf-8') as f:
             json.dump(TwitterList.userlists, f, ensure_ascii=False, indent=4, separators=(',', ': '))
 
 
-    def login(self, cookie: str, authorization: str):
-        cookie_list = dict([i.split('=', 1) for i in cookie.split('; ')])
+    def login(cookie=None):
+        msg = 'Current account has been switched to [{}]'
+        if cookie == None:
+            cookie = Manager.spare.get()
+            msg = msg + '(from spare)'
+        
+        cookie = dict([i.split('=', 1) for i in cookie.split('; ')])
 
         header = {
-            'cookie': cookie,
-            'X-Csrf-Token': cookie_list['ct0'],
+            'X-Csrf-Token': cookie['ct0'],
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Safari/537.36',
-            'Authorization': authorization
+            'Authorization': Manager.authorization
         }
+        ses.cookies.update(cookie)
         ses.headers.update(header)
 
         res = ses.get(Settings.api)
         raise_if_error(res)
-        return res.json()
+        Manager.screen_name = res.json()['screen_name']
+        logger.debug(msg.format(Manager.screen_name))
+        os.system('title ' + Manager.screen_name)
 
-    def get_lists(self) -> list:
+
+    def add_spare(cookie: str | list):
+        if type(cookie) == str:
+            Manager.spare.put(cookie)
+        else:
+            for c in cookie:
+                Manager.spare.put(c)
+
+
+    def get_lists() -> list:
         try:
             r = ses.get(ListManagementPageTimeline.api, json=ListManagementPageTimeline.params)
             r.raise_for_status()
@@ -79,47 +102,41 @@ class Manager:
         return results
     
 
-    def download_list(self, rest_id: list | str | int):
-        if type(rest_id) != list:
-            temp = rest_id
-            rest_id = [temp]
-            del temp
-
-        for r in rest_id:
-            TwitterList(r).download_all()
+    def download_list(rest_id: str | int):
+        TwitterList(str(rest_id)).download_all()
 
 
-    def download_user(self, screen_name: list | str):
-        path = self.path + '\\other'
-        with open(path + '\\.users.json', encoding='utf-8') as f:
-            users = json.load(f)
+    def download_user(screen_name: str):
+        local = TwitterList(-1, 'other', 1)
+        TwitterUser(screen_name, local).download()
+
+        # path = core.path + '\\other'
+        # with open(path + '\\.users.json', encoding='utf-8') as f:
+        #     users = json.load(f)
         
-        try:
-            if type(screen_name) == str:
-                temp = screen_name
-                screen_name = [temp]
-                del temp
+        # try:
+        #     if type(screen_name) == str:
+        #         temp = screen_name
+        #         screen_name = [temp]
+        #         del temp
 
-            for i in screen_name:
-                try:
-                    TwitterUser(i, users, 'other').download()
-                except TwUserError as err:
-                    logger.warning(err.fmt_msg())
-                    continue
-        finally:
-            with open(path + '\\.users.json', 'w', encoding='utf-8') as f:
-                json.dump(users, f, ensure_ascii=False, indent=4, separators=(',', ': '))
+        #     for i in screen_name:
+        #         try:
+        #             TwitterUser(i, users, 'other').download()
+        #         except TwUserError as err:
+        #             logger.warning(err.fmt_msg())
+        #             continue
+        # finally:
+        #     with open(path + '\\.users.json', 'w', encoding='utf-8') as f:
+        #         json.dump(users, f, ensure_ascii=False, indent=4, separators=(',', ': '))
 
 
-    def download_all_list(self):
-        for list in self.get_lists():
-            TwitterList(list['id_str'], list['name'], list['member_count']).download_all()
-
-    def download_following(self):
+    def download_following():
         # TODO
         pass
 
-    def move_user(self, screen_name: str, src_id: str, dst_id: str):
+
+    def move_user(screen_name: str, src_id: str, dst_id: str):
         try:
             user = TwitterUser(screen_name)
         except TwUserError as ex:
@@ -150,7 +167,8 @@ class Manager:
         # file
         logger.debug(shutil.move(os.path.join(src.path, user.title), dst.path))
 
-    def follow_user(self, screen_name: str, user_id = 0):
+
+    def follow_user(screen_name: str | None, user_id = 0):
         from api import Create
         import utility
         from exception import TWRequestError
@@ -158,12 +176,16 @@ class Manager:
         if user_id == 0:
             user_id = int(TwitterUser(screen_name).rest_id)
         Create.params['user_id'] = user_id
-        
-        res = ses.post(Create.api, data=Create.params)
-        utility.raise_if_error(res)
+        try:
+            res = ses.post(Create.api, data=Create.params)
+            utility.raise_if_error(res)
+        except TWRequestError as err:
+            logger.warning(err.msg())
+            return False
+        return True
  
  
-    def user_to_list(self, user_id: str, list_id: str):
+    def user_to_list(user_id: str, list_id: str):
         ListAddMember.params['variables']['listId'] = list_id
         ListAddMember.params['variables']['userId'] = user_id
         res = ses.post(ListAddMember.api, json=ListAddMember.params)
