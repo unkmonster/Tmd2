@@ -7,6 +7,8 @@ from utils.utility import raise_if_error
 from src.session import session
 from src.settings import *
 
+import concurrent.futures  
+
 class TwitterList:
     def __init__(self, rest_id, name = None, member_count = None) -> None:
         self.rest_id = str(rest_id)
@@ -53,6 +55,8 @@ class TwitterList:
             config.store_dir.joinpath(listmap[self.rest_id]['names'][0]).rename(self.path)
             listmap[self.rest_id]["names"].insert(0, self.name)
             project.listj_dir.write_text(json.dumps(listmap, ensure_ascii=False, indent=4, separators=(',', ': ')), 'utf-8')
+        if not self.path.exists():
+            self.path.mkdir(parents=True)
 
 
     def create_profile(self):
@@ -111,24 +115,40 @@ class TwitterList:
         from user import TwitterUser
         from utils.exception import TWRequestError, TwUserError
         
+
         entries = self.get_members()
         count = 1
-        #t1 = prog.add_task(self.name, total=self.member_count)   
-        for entry in entries:
-            content = entry['content']
-            if content['entryType'] == 'TimelineTimelineItem':
-                result = content['itemContent']['user_results']['result']
-                os.system("title {} {}/{}".format(self.name, count, self.member_count))
-                try:
-                    TwitterUser(result['legacy']['screen_name'], 
-                                self,
-                                result['legacy']['name'],
-                                result['rest_id']).download()
-                except TWRequestError as err:
-                    logger.warning(err.msg())
-                except TwUserError as err:
-                    logger.warning(err.fmt_msg())
-                    if err.reason == 'UserUnavailable':
-                        print('需要关注')
-                        pass
-                count = count + 1
+        os.system("title {} {}/{}".format(self.name, count, self.member_count))
+        
+        def progress_update(f): # future callback
+            nonlocal count
+            count = count + 1
+            os.system("title {} {}/{}".format(self.name, count, self.member_count))
+
+
+        futures = [] 
+        with concurrent.futures.ThreadPoolExecutor() as exc: 
+            for entry in entries:
+                content = entry['content']
+                if content['entryType'] == 'TimelineTimelineItem':
+                    result = content['itemContent']['user_results']['result']
+                    os.system("title {} {}/{}".format(self.name, count, self.member_count))
+                    
+                    future = exc.submit(TwitterUser.download, TwitterUser(result['legacy']['screen_name'], 
+                                                                            self,
+                                                                            result['legacy']['name'],
+                                                                            result['rest_id'])
+                    )
+                    future.add_done_callback(progress_update)
+                    futures.append(future)
+                    
+        for res in concurrent.futures.as_completed(futures):
+            try:
+                res.exception()
+            except TWRequestError as err:
+                logger.warning(err)
+            except TwUserError as err:
+                logger.warning(err.fmt_msg())
+                if err.reason == 'UserUnavailable':
+                    print('需要关注')
+                    pass
