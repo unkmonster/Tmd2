@@ -30,13 +30,6 @@ def download(url: str, overwrite: bool, *, path = '.', name = None, change_suffi
             f.write(chunk)
 
 
-def get_filename_from_path(path : str) -> str:
-    i = path.find('?')
-    if i != -1:
-        path = path[:i]
-    return path.split('/')[-1]
-
-
 def create_shortcut(target: str, saveto):
     name = target[target.rfind('\\') + 1:]
     
@@ -53,6 +46,16 @@ def raise_if_error(response):
     from exception import TWRequestError
     errors = response.json().get('errors')
     if errors != None:
-        raise TWRequestError(*errors)
-    
+        raise TWRequestError(errors)
+
+
+def handle_title(full_text: str) -> str:
+    import pattern
+    full_text = pattern.url.sub('', full_text)
+    full_text = pattern.at.sub('', full_text)
+    full_text = pattern.tag.sub('', full_text)
+    full_text = pattern.enter.sub(' ', full_text)
+    full_text = pattern.nonsupport.sub('', full_text)
+    return full_text.strip()
+
 timeformat = '%a %b %d %H:%M:%S %z %Y'

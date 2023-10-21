@@ -27,4 +27,5 @@ session.cookies.update(cookie)
 
 r = session.get(Settings.api)
 info = r.json()
-print('已登录：', info['screen_name'])
+import rich
+rich.print('已登录：', info['screen_name'])

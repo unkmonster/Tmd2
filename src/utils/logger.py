@@ -2,8 +2,8 @@ import logging
 import os
 from datetime import date
 import sys
+from src.settings import project
 
-logging.LogRecord
 class ColoredFormatter(logging.Formatter):
     color = {
         "DEBUG": 94,
@@ -22,6 +22,7 @@ class ColoredFormatter(logging.Formatter):
         return logging.Formatter.format(self, newrecord)
     pass
 
+
 class MyHandler(logging.StreamHandler):
     def __init__(self, stream=None):
         super().__init__(stream)
@@ -37,31 +38,24 @@ class MyHandler(logging.StreamHandler):
         pass
 
 
-# create floder
-dir = os.getenv('appdata') + '\\Tmd2'
-if not os.path.exists(dir):
-    os.mkdir(dir)
-if not os.path.exists(dir + '\\log'):
-    os.mkdir(dir + '\\log')
-
 # create logger
 logger = logging.getLogger("rich")
 logger.setLevel(logging.DEBUG)
 
 # create handler
 today = date.today().strftime('%Y-%m-%d')
-log_path = f"{dir}\\log\\{today}.log"
+log_path = project.logs_dir.joinpath('{}.log'.format(today))
 
 sh = MyHandler(sys.stdout)
 fh = logging.FileHandler(log_path, 'a', 'utf-8')
 
 # create formatter
-formatter = logging.Formatter('%(asctime)s [%(levelname)s] %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
+file_formatter = logging.Formatter('%(asctime)s [%(levelname)s] %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
 con_formatter = ColoredFormatter('%(asctime)s [%(levelname)s] %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
 
 # add formatter and filter to handler
 sh.setFormatter(con_formatter)
-fh.setFormatter(formatter)
+fh.setFormatter(file_formatter)
 
 fh.addFilter(lambda record: record.levelno >= logging.INFO)
 

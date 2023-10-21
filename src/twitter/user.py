@@ -116,10 +116,7 @@ class TwitterUser:
         except TWRequestError as er:
             if res.status_code == requests.codes.TOO_MANY:
                 if int(res.headers['x-rate-limit-remaining']) > 0:
-                    from manager import Manager
-                    if Manager.spare.empty():
-                        raise RuntimeError(er.msg())
-                    Manager.login()
+                    logger.warning('此账号已被限制')
                 else:                
                     limit_time = datetime.datetime.fromtimestamp(int(res.headers['x-rate-limit-reset']))
                     logger.warning(

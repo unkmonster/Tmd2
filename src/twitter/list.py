@@ -25,7 +25,7 @@ class TwitterList:
         self.member_count = member_count
         self.path = config.store_dir.joinpath(self.name)
 
-        self.usermap_dir = project.list_dir.joinpath('{}.json'.format(self.rest_id))
+        self.usermap_dir = project.lists_dir.joinpath('{}.json'.format(self.rest_id))
         self.users = {}
         """用户信息字典"""
 
@@ -63,7 +63,7 @@ class TwitterList:
         project.listj_dir.write_text(json.dumps(listmap, ensure_ascii=False, indent=4, separators=(',', ': ')), 'utf-8')
 
         if not self.path.exists():
-            self.path.mkdir()
+            self.path.mkdir(parents=True)
         
         # 以 rest_id 为文件名创建当前列表的 'users.json'
         if not self.usermap_dir.exists():
@@ -75,6 +75,10 @@ class TwitterList:
 
 
     def get_members(self) -> list:
+        if int(self.rest_id) < 0:
+            logger.warning('本地列表不允许调用')
+            return []
+
         members = []
         ListMembers.params['variables']['listId'] = self.rest_id
         ListMembers.params['variables']['count'] = 200
@@ -100,6 +104,10 @@ class TwitterList:
     
     
     def download(self):
+        if int(self.rest_id) < 0:
+            logger.warning('本地列表不允许调用')
+            return
+            
         from user import TwitterUser
         from utils.exception import TWRequestError, TwUserError
         

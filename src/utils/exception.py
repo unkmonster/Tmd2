@@ -1,4 +1,5 @@
 class TWRequestError(RuntimeError):
+    @property
     def msg(self)->str:
         return self.args[0]['message']
     pass

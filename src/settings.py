@@ -1,17 +1,17 @@
 from dataclasses import dataclass
 from pathlib import Path
-import sys
-from utils.logger import logger
 import os
 
 @dataclass
 class Project:
     root_dir =  Path(os.getenv('appdata')).joinpath('tmd2')
-    
+    logs_dir = root_dir.joinpath('logs')
+    lists_dir = root_dir.joinpath('lists')
+
     conf_dir = root_dir.joinpath('config.json')
     cookie_dir = root_dir.joinpath('cookie')
     listj_dir = root_dir.joinpath('list.json')
-    list_dir = root_dir.joinpath('lists')
+    
 
 
 @dataclass
@@ -26,8 +26,10 @@ class Config:
         import json
         if not pj.root_dir.exists():
             pj.root_dir.mkdir()
-        if not pj.list_dir.exists():
-            pj.list_dir.mkdir()
+        if not pj.lists_dir.exists():
+            pj.lists_dir.mkdir()
+        if not pj.logs_dir.exists():
+            pj.logs_dir.mkdir()
         if not pj.listj_dir.exists():
             pj.listj_dir.write_text(json.dumps(dict()))
 
