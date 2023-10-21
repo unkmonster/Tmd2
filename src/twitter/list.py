@@ -40,7 +40,7 @@ class TwitterList:
 
     def __del__(self):
         self.usermap_dir.write_text(json.dumps(self.users, ensure_ascii=False, indent=4, separators=(',', ': ')), 'utf-8')
-        #logger.debug("Saved {}".format(os.path.join(self.path, '.users.json')))
+        logger.debug("Saved {}".format(self.usermap_dir))
 
     
     def is_exist(self) -> bool:
