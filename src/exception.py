@@ -1,2 +1,0 @@
-class TWRequestError(RuntimeError):
-    pass
