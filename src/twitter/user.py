@@ -4,7 +4,7 @@ import time
 from datetime import datetime, timezone, timedelta
 
 from api import UserByScreenName, UserMedia
-from utils.exception import TWRequestError, TwUserError
+from utils.exception import *
 from utils.utility import *
 from src.utilitycpp import *
 from utils.logger import logger

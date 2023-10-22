@@ -16,7 +16,7 @@ class Project:
 
 @dataclass
 class Config:
-    cookie: str
+    cookie: list[str]
     authorization: str
 
     store_dir: Path
@@ -48,10 +48,11 @@ class Config:
         
         while True:
             try:
-                _cookie = pj.cookie_dir.read_text()
+                _cookie = pj.cookie_dir.read_text().strip()
+                _cookie = [c for c in _cookie.split('\n')]
             except FileNotFoundError:
                 pj.cookie_dir.open('w')
-                print('请填写 Cookie 后保存')
+                print('请填写 Cookie 后保存（换行分隔）')
                 os.system("notepad {}".format(str(pj.cookie_dir)))
             else:
                 break
@@ -65,3 +66,4 @@ class Config:
 
 project = Project()
 config = Config.load(project)
+print('配置已加载')
