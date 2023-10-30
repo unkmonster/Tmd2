@@ -1,37 +1,38 @@
 import requests
 from urllib3.util import Retry
 from requests.adapters import HTTPAdapter
-from src.settings import config, project
+from src.settings import *
 
 from twitter.api import Settings
+from dataclasses import dataclass
 
-session = requests.session()
-retries = Retry(
-    backoff_factor=0.1,
-    status_forcelist=[502, 503, 504],
-    status=10,
-    connect=10
-)
-session.mount('https://', HTTPAdapter(max_retries=retries))
-info = {}
+@dataclass
+class Account:
+    session: requests.Session
+    screen_name: str
 
-def login(cookie = config.cookie[0]):
-    global session
-    global info
-    cookie = dict([i.split('=', 1) for i in cookie.split('; ')])
-    header = {
-        'X-Csrf-Token': cookie['ct0'],
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Safari/537.36',
-        'Authorization': config.authorization
-    }
-    session.headers.update(header)
-    session.cookies.update(cookie)
+    @classmethod
+    def login(cls, cookie):
+        session = requests.session()
+        retries = Retry(
+            backoff_factor=0.1,
+            status_forcelist=[502, 503, 504],
+            status=10,
+            connect=10
+        )
+        session.mount('https://', HTTPAdapter(max_retries=retries))
 
-    if 'screen_name' in info:
-        print('已退出:', info['screen_name'])
-    r = session.get(Settings.api, timeout=10)
-    info = r.json()
-    print('已登录:', info['screen_name'])
+        cookie = dict([i.split('=', 1) for i in cookie.split('; ')])
+        header = {
+            'X-Csrf-Token': cookie['ct0'],
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Safari/537.36',
+            'Authorization': config.authorization
+        }
+        session.headers.update(header)
+        session.cookies.update(cookie)
+
+        r = session.get(Settings.api, timeout=10)
+        return cls(session, r.json()['screen_name'])
 
 
 def add_cookie(cookie: str) -> bool:
@@ -45,4 +46,6 @@ def add_cookie(cookie: str) -> bool:
     return False
 
 
-login()
+account = Account.login(config.cookie[0])
+session = account.session
+print('已登录:', account.screen_name)

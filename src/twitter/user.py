@@ -4,20 +4,25 @@ import time
 from datetime import datetime, timezone, timedelta
 
 from api import UserByScreenName, UserMedia
-from utils.exception import *
-from utils.utility import *
+from src.utils.exception import *
+from src.utils.utility import *
 from src.utilitycpp import *
-from utils.logger import logger
+from src.utils.logger import logger
 
 from src.session import session
-from src.settings import config
+from src.settings import *
+from readerwriterlock import rwlock
+
+
+rwlock =  rwlock.RWLockFair()
+
 
 class TwitterUser:
     from twitter.list import TwitterList
-    def __init__(self, screen_name: str, belong_to: TwitterList= None, name=None, rest_id=None) -> None:
+    def __init__(self, screen_name: str, belong_to: TwitterList=None, name=None, rest_id=None) -> None:
         """ 账号不存在或账号被暂停,或受保护账号，抛出UserError
         """
-        from utils import pattern
+        from src.utils import pattern
 
         # 如果 name 或 rest_id 未指定，则利用 screen_name 获取
         if (name or rest_id) == None:
@@ -42,63 +47,87 @@ class TwitterUser:
         self.title = f'{pattern.nonsupport.sub("", self.name)}({self.screen_name})'
         self.belong_to = belong_to
 
-        # TODO
-        # 目前的情况是，如果此用户隶属于某个列表，或本地列表。我们才创建为其创建配置。
-        # 但没有配置的用户是无法下载的，所以此用户只用于获取信息。
-        if self.belong_to != None:
-            self.path = os.path.join(self.belong_to.path, self.title)
-            exist = self.is_exist()
-            if exist:
-                self.update()
-            self.prefix = '{}/{}'.format(self.belong_to.name, self.title)
-            if not exist:
-                self.create_profile()
-       
-        #self.failures = [] ## TODO
-        pass
+        exist = self.is_exist()
+        if exist:
+            #self.tmp()
+            self.update()
+        self.prefix = '{}/{}'.format(self.belong_to.name, self.title)
+        if not exist:
+            self.create_profile()
+        self.path = self.belong_to.path.joinpath(self.title)
 
 
     def is_exist(self) -> bool:
-        if self.belong_to.user_exist(self.rest_id):
-            return True
-        # else: # TODO
-        #     # 判断此用户是否已存在于本地其他列表
-        #     from twitter.list import TwitterList
-        #     with open(os.path.join(core.path, '.lists.json'), encoding='utf-8') as f:
-        #         lists = json.load(f)
-        #         del lists[self.belong_to.rest_id]
-        #         for k in lists:
-        #             if k != '-1':
-        #                 tl = TwitterList(k)
-        #                 if tl.user_exist(self.rest_id):
-        #                     self.belong_to = tl
-        #                     self.path = os.path.join(self.belong_to.path, self.title)
-
-        #                     create_shortcut(self.path, self.belong_to.path)
-        #                     return True
-        return False
+        lock = rwlock.gen_rlock()
+        lock.acquire()
+        users = json.loads(project.usersj_dir.read_text('utf-8'))
+        lock.release()
+        return self.rest_id in users
 
 
     def update(self):
-        if self.title != self.belong_to.users[self.rest_id]['names'][0]:
-            root = self.path[:self.path.rfind('\\')]    
-            os.rename(os.path.join(root, self.belong_to.users[self.rest_id]["names"][0]), self.path)
-            self.belong_to.users[self.rest_id]['names'].insert(0, self.title)
-            logger.info('Renamed: {} -> {}'.format(self.belong_to.users[self.rest_id]["names"][1], 
-                                                  self.belong_to.users[self.rest_id]["names"][0]))
-        self.latest = self.belong_to.users[self.rest_id]['latest']
-        pass
+        from twitter.list import TwitterList
+        
+        lock = rwlock.gen_wlock()
+        lock.acquire()
+        users = json.loads(project.usersj_dir.read_text('utf-8'))
+        
+        belong_to = TwitterList(users[self.rest_id]['belong_to'][0])
+
+        # 更新用户名
+        renamed = False
+        latest_name = users[self.rest_id]['names'][-1]
+        if self.title != latest_name:
+            belong_to.path.joinpath(latest_name).rename(belong_to.path.joinpath(self.title))
+            users[self.rest_id]['names'].append(self.title)
+            logger.info('Renamed {} -> {}'.format(latest_name, self.title))
+            renamed = True
+
+        # 检查是否需要创建快捷方式
+        if self.belong_to.rest_id not in users[self.rest_id]['belong_to']:
+            users[self.rest_id]['belong_to'].append(self.belong_to.rest_id)
+            create_shortcut(belong_to.path.joinpath(self.title), self.belong_to.path)
+            logger.info('Direct {1}/{0} -> {2}/{0}'.format(self.title, self.belong_to.name, belong_to.name))
+        elif self.belong_to.rest_id != users[self.rest_id]['belong_to'][0] and renamed:
+            """更改了用户名并且当前列表非首次创建者，更新快捷方式"""
+            try:
+                self.belong_to.path.joinpath(latest_name).with_suffix('.lnk').unlink()
+            except FileNotFoundError as err:
+                logger.warning(err)
+            create_shortcut(belong_to.path.joinpath(self.title), self.belong_to.path)
+            
+
+        self.belong_to = belong_to
+        self.latest = users[self.rest_id]['latest']
+        project.usersj_dir.write_text(json.dumps(users, indent=4, allow_nan=True, ensure_ascii=False), 'utf-8')
+        lock.release()
+
+
+    # def tmp(self):
+    #     users = json.loads(project.usersj_dir.read_text('utf-8'))
+    #     users[self.rest_id]['belong_to'] = [self.belong_to.rest_id]
+    #     project.usersj_dir.write_text(json.dumps(users, indent=4, allow_nan=True, ensure_ascii=False), 'utf-8')
 
 
     def create_profile(self):
         self.latest = datetime.strftime(datetime.fromtimestamp(0, timezone(timedelta(hours=0))), '%a %b %d %H:%M:%S %z %Y')
-        self.belong_to.users[self.rest_id] = {
+        info = {
             'names': [self.title], 
-            'latest': self.latest
+            'latest': self.latest,
+            'belong_to': [
+                self.belong_to.rest_id
+            ]
         }
-
-        if not os.path.exists(self.path):
-            os.mkdir(self.path)
+        lock = rwlock.gen_wlock()
+        lock.acquire()
+        users = json.loads(project.usersj_dir.read_text('utf-8'))
+        users[self.rest_id] = info
+        project.usersj_dir.write_text(json.dumps(users, indent=4, allow_nan=True, ensure_ascii=False), 'utf-8')
+        lock.release()
+        
+        self.path = self.belong_to.path.joinpath(self.title)
+        if not self.path.exists():
+            self.path.mkdir()
         logger.info('Created {}'.format(self.prefix))
 
 
@@ -136,7 +165,7 @@ class TwitterUser:
             raise TwUserError(self, 'UserUnavailable')
 
 
-    def get_entries(self) -> list:
+    def get_entries(self) -> list[Tweet]:
         def max_bitrate(variants)->str:
             """ 用于获取最高比特率的视频
             """
@@ -197,53 +226,15 @@ class TwitterUser:
         return items
 
 
-    def download_tweets(self, entries, overwrite: bool) -> tuple:   ## 不要了！
-        created_at = self.latest
-        need_failed_created_at = False
-        for i, tweet in enumerate(entries):
-            try:
-                for p in tweet.pic_url:
-                    utility.download(p, overwrite, path=self.path, name=tweet.text)
-
-                for v in tweet.vid_url:
-                    while len(v):
-                        try:
-                            utility.download(v.pop(), overwrite, path=self.path, name=tweet.text)
-                        except requests.HTTPError as err:
-                            if err.response.status_code == requests.codes.NOT_FOUND:
-                                continue
-                        else:
-                            break
-            except requests.RequestException as ex:
-                self.failures.append(tweet)
-                logger.warning(repr(ex))
-                need_failed_created_at = True
-                continue
-            else:
-                print('{} [{}/{}] {}'.format(self.prefix, i + 1, len(entries), tweet.text))
-                created_at = tweet.created_at
-                need_failed_created_at = False
-        return (need_failed_created_at, created_at)
-
-
-    def retry(self, update_latest: bool):   ## 不要了！
-        entries = self.failures
-        self.failures.clear()
-        result = self.download_tweets(entries, True)
-
-        if update_latest:
-            self.belong_to.users[self.rest_id]['latest'] = result[1]
-
-        if len(self.failures):
-            logger.warning("There are tweets with failed downloads by {})", self.title)
-        for i, t in enumerate(self.failures):
-            logger.warning(t.text)
-
-
     def download(self):
         entries = self.get_entries()
-        latest = cdownload(entries, self.path)
+        latest = cdownload(entries, str(self.path))
 
         #print('calc time = %dms' % int((time.time() - start) * 1000))
         if latest:
-            self.belong_to.users[self.rest_id]['latest'] = datetime.strftime(datetime.fromtimestamp(latest, timezone(timedelta(hours=0))), timeformat)
+            lock = rwlock.gen_wlock()
+            lock.acquire()
+            users = json.loads(project.usersj_dir.read_text('utf-8'))
+            users[self.rest_id]['latest'] = datetime.strftime(datetime.fromtimestamp(latest, timezone(timedelta(hours=0))), timeformat)
+            project.usersj_dir.write_text(json.dumps(users, indent=4, allow_nan=True, ensure_ascii=False), 'utf-8')
+            lock.release()

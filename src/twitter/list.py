@@ -2,7 +2,7 @@ import json
 import os
 from api import ListByRestId, ListMembers, Create
 
-from utils.logger import logger
+from src.utils.logger import logger
 from utils.utility import raise_if_error
 from src.session import session
 from src.settings import *
@@ -27,22 +27,10 @@ class TwitterList:
         self.member_count = member_count
         self.path = config.store_dir.joinpath(self.name)
 
-        self.usermap_dir = project.lists_dir.joinpath('{}.json'.format(self.rest_id))
-        self.users = {}
-        """用户信息字典"""
-
-
         if not self.is_exist():
             self.create_profile()
         else:
             self.update()
-    
-        self.users = json.loads(self.usermap_dir.read_text('utf-8'))
-
-
-    def __del__(self):
-        self.usermap_dir.write_text(json.dumps(self.users, ensure_ascii=False, indent=4, separators=(',', ': ')), 'utf-8')
-        logger.debug("Saved {}".format(self.usermap_dir))
 
     
     def is_exist(self) -> bool:
@@ -68,14 +56,6 @@ class TwitterList:
 
         if not self.path.exists():
             self.path.mkdir(parents=True)
-        
-        # 以 rest_id 为文件名创建当前列表的 'users.json'
-        if not self.usermap_dir.exists():
-            self.usermap_dir.write_text(json.dumps(dict()))
-    
-
-    def user_exist(self, rest_id)->bool:
-        return rest_id in self.users
 
 
     def get_members(self) -> list:
@@ -107,6 +87,19 @@ class TwitterList:
                     break
     
     
+    def tmp(self):
+        from user import TwitterUser
+        entries = self.get_members()
+        for entry in entries:
+                content = entry['content']
+                if content['entryType'] == 'TimelineTimelineItem':
+                    result = content['itemContent']['user_results']['result']
+                    TwitterUser(result['legacy']['screen_name'], 
+                                                                            self,
+                                                                            result['legacy']['name'],
+                                                                            result['rest_id'])
+
+
     def download(self):
         if int(self.rest_id) < 0:
             logger.warning('本地列表不允许调用')
@@ -117,7 +110,7 @@ class TwitterList:
         
 
         entries = self.get_members()
-        count = 1
+        count = 0
         os.system("title {} {}/{}".format(self.name, count, self.member_count))
         
         def progress_update(f): # future callback

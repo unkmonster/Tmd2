@@ -3,7 +3,7 @@ from src.session import session
 from twitter.user import TwitterUser
 from twitter.list import TwitterList
 
-from utils.logger import logger
+from src.utils.logger import logger
 from utils.exception import *
 from utils.utility import raise_if_error
 
