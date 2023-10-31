@@ -6,8 +6,7 @@ import os
 class Project:
     root_dir =  Path(os.getenv('appdata')).joinpath('tmd2')
     logs_dir = root_dir.joinpath('logs')
-    lists_dir = root_dir.joinpath('lists')
-
+    usersj_dir = root_dir.joinpath('users.json')
     conf_dir = root_dir.joinpath('config.json')
     cookie_dir = root_dir.joinpath('cookie')
     listj_dir = root_dir.joinpath('list.json')
@@ -16,7 +15,7 @@ class Project:
 
 @dataclass
 class Config:
-    cookie: str
+    cookie: list[str]
     authorization: str
 
     store_dir: Path
@@ -26,12 +25,12 @@ class Config:
         import json
         if not pj.root_dir.exists():
             pj.root_dir.mkdir()
-        if not pj.lists_dir.exists():
-            pj.lists_dir.mkdir()
         if not pj.logs_dir.exists():
             pj.logs_dir.mkdir()
         if not pj.listj_dir.exists():
             pj.listj_dir.write_text(json.dumps(dict()))
+        if not pj.usersj_dir.exists():
+            pj.usersj_dir.write_text(json.dumps(dict()))
 
         while True:
             try:
@@ -48,10 +47,11 @@ class Config:
         
         while True:
             try:
-                _cookie = pj.cookie_dir.read_text()
+                _cookie = pj.cookie_dir.read_text().strip()
+                _cookie = [c for c in _cookie.split('\n')]
             except FileNotFoundError:
                 pj.cookie_dir.open('w')
-                print('请填写 Cookie 后保存')
+                print('请填写 Cookie 后保存（换行分隔）')
                 os.system("notepad {}".format(str(pj.cookie_dir)))
             else:
                 break
@@ -65,3 +65,4 @@ class Config:
 
 project = Project()
 config = Config.load(project)
+print('配置已加载')
