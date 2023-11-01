@@ -6,3 +6,4 @@ src/test.pyw
 run.bat
 json
 tests/main.py
+site-packages
