@@ -40,6 +40,7 @@ class UserMedia:
         }
     )
         
+
 class UserByScreenName:
     api = 'https://twitter.com/i/api/graphql/xc8f1g7BYqr6VTzTbvNlGw/UserByScreenName'
 
@@ -63,6 +64,7 @@ class UserByScreenName:
             "withAuxiliaryUserLabels":False
         }
     )
+
 
 class ListMembers:
     api = 'https://twitter.com/i/api/graphql/1icjxQY7vy1IQQyY8Sr7iw/ListMembers'
@@ -97,6 +99,7 @@ class ListMembers:
         }
     )
 
+
 # Info of list
 class ListByRestId:
     api = 'https://twitter.com/i/api/graphql/gO1_eYPohKYHwCG2m-1ZnQ/ListByRestId'
@@ -114,6 +117,7 @@ class ListByRestId:
         }
     )
 
+
 class Settings:
     api = 'https://api.twitter.com/1.1/account/settings.json'
 
@@ -122,6 +126,7 @@ class Settings:
     #     'include_nsfw_user_flag': True,
     #     include_nsfw_admin_flag: True
     # }
+
 
 class ListManagementPageTimeline:
     api = 'https://twitter.com/i/api/graphql/DcpIrsrn_SDT_5q0jV_exQ/ListsManagementPageTimeline'
@@ -154,6 +159,7 @@ class ListManagementPageTimeline:
         }
     )
 
+
 class ListAddMember:
     api = "https://twitter.com/i/api/graphql/gof0_Modm4n97yo7bGPjlA/ListAddMember"
 
@@ -172,6 +178,7 @@ class ListAddMember:
         "queryId": "gof0_Modm4n97yo7bGPjlA"
 }
     
+
 class ListRemoveMember:
     api = 'https://twitter.com/i/api/graphql/yvfoG991IAuumH847Z0ypw/ListRemoveMember'
 
@@ -189,6 +196,7 @@ class ListRemoveMember:
         },
         "queryId": "yvfoG991IAuumH847Z0ypw"
 }
+    
     
 class Create:
     api = 'https://twitter.com/i/api/1.1/friendships/create.json'

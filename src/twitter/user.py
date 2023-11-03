@@ -39,7 +39,7 @@ class TwitterUser:
                 name = res.json()['data']['user']['result']['legacy']['name']
                 rest_id = res.json()['data']['user']['result']['rest_id']
             else:
-                raise TwUserError(screen_name, "Account doesn't exist")
+                raise TWRequestError(screen_name, "Account doesn't exist")
 
         self.screen_name = screen_name
         self.name = name
@@ -47,14 +47,10 @@ class TwitterUser:
         self.title = f'{pattern.nonsupport.sub("", self.name)}({self.screen_name})'
         self.belong_to = belong_to
 
-        exist = self.is_exist()
-        if exist:
-            #self.tmp()
+        if self.is_exist():
             self.update()
-        self.prefix = '{}/{}'.format(self.belong_to.name, self.title)
-        if not exist:
+        else:
             self.create_profile()
-        self.path = self.belong_to.path.joinpath(self.title)
 
 
     def is_exist(self) -> bool:
@@ -99,6 +95,8 @@ class TwitterUser:
 
         self.belong_to = belong_to
         self.latest = users[self.rest_id]['latest']
+        self.path = self.belong_to.path.joinpath(self.title)
+        self.prefix = '{}/{}'.format(self.belong_to.name, self.title)
         project.usersj_dir.write_text(json.dumps(users, indent=4, allow_nan=True, ensure_ascii=False), 'utf-8')
         lock.release()
 
@@ -126,6 +124,7 @@ class TwitterUser:
         lock.release()
         
         self.path = self.belong_to.path.joinpath(self.title)
+        self.prefix = '{}/{}'.format(self.belong_to.name, self.title)
         if not self.path.exists():
             self.path.mkdir()
         logger.info('Created {}'.format(self.prefix))
@@ -228,6 +227,8 @@ class TwitterUser:
 
     def download(self):
         entries = self.get_entries()
+        if not len(entries):
+            return
         latest = cdownload(entries, str(self.path))
 
         #print('calc time = %dms' % int((time.time() - start) * 1000))

@@ -7,3 +7,4 @@ run.bat
 json
 tests/main.py
 site-packages
+task.bat

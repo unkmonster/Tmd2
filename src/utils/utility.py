@@ -37,10 +37,14 @@ def create_shortcut(target: Path, saveto: Path):
 
 
 def raise_if_error(response):
-    from exception import TWRequestError
-    errors = response.json().get('errors')
+    from src.utils.exception import TWRequestError
+    try:
+        errors = response.json().get('errors')
+    except:
+        if response.status_code != 200:
+            raise TWRequestError(response.text)
     if errors != None:
-        raise TWRequestError(errors)
+        raise TWRequestError(*errors)
 
 
 def handle_title(full_text: str) -> str:
