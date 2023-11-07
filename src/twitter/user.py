@@ -47,13 +47,15 @@ class TwitterUser:
         self.title = f'{pattern.nonsupport.sub("", self.name)}({self.screen_name})'
         self.belong_to = belong_to
 
-        if self.is_exist():
-            self.update()
+        
+    def _create(self):
+        if self._is_exist():
+            self._update()
         else:
-            self.create_profile()
+            self._create_profile()
 
 
-    def is_exist(self) -> bool:
+    def _is_exist(self) -> bool:
         lock = rwlock.gen_rlock()
         lock.acquire()
         users = json.loads(project.usersj_dir.read_text('utf-8'))
@@ -61,7 +63,7 @@ class TwitterUser:
         return self.rest_id in users
 
 
-    def update(self):
+    def _update(self):
         from twitter.list import TwitterList
         
         lock = rwlock.gen_wlock()
@@ -101,13 +103,7 @@ class TwitterUser:
         lock.release()
 
 
-    # def tmp(self):
-    #     users = json.loads(project.usersj_dir.read_text('utf-8'))
-    #     users[self.rest_id]['belong_to'] = [self.belong_to.rest_id]
-    #     project.usersj_dir.write_text(json.dumps(users, indent=4, allow_nan=True, ensure_ascii=False), 'utf-8')
-
-
-    def create_profile(self):
+    def _create_profile(self):
         self.latest = datetime.strftime(datetime.fromtimestamp(0, timezone(timedelta(hours=0))), '%a %b %d %H:%M:%S %z %Y')
         info = {
             'names': [self.title], 
@@ -226,6 +222,7 @@ class TwitterUser:
 
 
     def download(self):
+        self._create()
         entries = self.get_entries()
         if not len(entries):
             return
