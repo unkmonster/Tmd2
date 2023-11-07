@@ -110,19 +110,19 @@ class TwitterList:
             nonlocal count
             count = count + 1
             os.system("title {} {}/{}".format(self.name, count, self.member_count))
-
-            exp = f.exception()
-            from src.features import follow_user
-            try:
-                if exp:
-                    raise exp
-            except TwUserError as err:
-                logger.warning(err.fmt_msg)
-                if err.reason == 'UserUnavailable':
-                    if follow_user(rest_id=err.user.rest_id):
-                        logger.info('Followed %s', err.user.title)
-            except TWRequestError as err:
-                logger.warning(err)
+            
+            # exp = f.exception()
+            # from src.features import follow_user
+            # try:
+            #     if exp:
+            #         raise exp
+            # except TwUserError as err:
+            #     logger.warning(err.fmt_msg)
+            #     if err.reason == 'UserUnavailable':
+            #         if follow_user(rest_id=err.user.rest_id):
+            #             logger.info('Followed %s', err.user.title)
+            # except TWRequestError as err:
+            #     logger.warning(err)
             
 
         futures = [] 
@@ -145,4 +145,17 @@ class TwitterList:
                     future.add_done_callback(progress_update)
                     futures.append(future)
         
-        concurrent.futures.wait(futures)
+        from src.features import follow_user
+        for f in concurrent.futures.as_completed(futures):
+            exp = f.exception()
+            try:
+                if exp:
+                    raise exp
+            except TwUserError as err:
+                logger.warning(err.fmt_msg)
+                if err.reason == 'UserUnavailable':
+                    if follow_user(rest_id=err.user.rest_id):
+                        logger.info('Followed %s', err.user.title)
+            except TWRequestError as err:
+                logger.warning(err)
+        #concurrent.futures.wait(futures, return_when='FIRST_EXCEPTION')
