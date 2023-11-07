@@ -48,7 +48,7 @@ def raise_if_error(response):
 
 
 def handle_title(full_text: str) -> str:
-    import pattern
+    from src.utils import pattern
     full_text = pattern.url.sub('', full_text)
     full_text = pattern.at.sub('', full_text)
     full_text = pattern.tag.sub('', full_text)
