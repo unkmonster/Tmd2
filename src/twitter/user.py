@@ -39,7 +39,7 @@ class TwitterUser:
                 name = res.json()['data']['user']['result']['legacy']['name']
                 rest_id = res.json()['data']['user']['result']['rest_id']
             else:
-                raise TwUserError(screen_name, "Account doesn't exist")
+                raise TWRequestError(screen_name, "Account doesn't exist")
 
         self.screen_name = screen_name
         self.name = name
@@ -47,17 +47,15 @@ class TwitterUser:
         self.title = f'{pattern.nonsupport.sub("", self.name)}({self.screen_name})'
         self.belong_to = belong_to
 
-        exist = self.is_exist()
-        if exist:
-            #self.tmp()
-            self.update()
-        self.prefix = '{}/{}'.format(self.belong_to.name, self.title)
-        if not exist:
-            self.create_profile()
-        self.path = self.belong_to.path.joinpath(self.title)
+        
+    def _create(self):
+        if self._is_exist():
+            self._update()
+        else:
+            self._create_profile()
 
 
-    def is_exist(self) -> bool:
+    def _is_exist(self) -> bool:
         lock = rwlock.gen_rlock()
         lock.acquire()
         users = json.loads(project.usersj_dir.read_text('utf-8'))
@@ -65,7 +63,7 @@ class TwitterUser:
         return self.rest_id in users
 
 
-    def update(self):
+    def _update(self):
         from twitter.list import TwitterList
         
         lock = rwlock.gen_wlock()
@@ -99,17 +97,13 @@ class TwitterUser:
 
         self.belong_to = belong_to
         self.latest = users[self.rest_id]['latest']
+        self.path = self.belong_to.path.joinpath(self.title)
+        self.prefix = '{}/{}'.format(self.belong_to.name, self.title)
         project.usersj_dir.write_text(json.dumps(users, indent=4, allow_nan=True, ensure_ascii=False), 'utf-8')
         lock.release()
 
 
-    # def tmp(self):
-    #     users = json.loads(project.usersj_dir.read_text('utf-8'))
-    #     users[self.rest_id]['belong_to'] = [self.belong_to.rest_id]
-    #     project.usersj_dir.write_text(json.dumps(users, indent=4, allow_nan=True, ensure_ascii=False), 'utf-8')
-
-
-    def create_profile(self):
+    def _create_profile(self):
         self.latest = datetime.strftime(datetime.fromtimestamp(0, timezone(timedelta(hours=0))), '%a %b %d %H:%M:%S %z %Y')
         info = {
             'names': [self.title], 
@@ -126,6 +120,7 @@ class TwitterUser:
         lock.release()
         
         self.path = self.belong_to.path.joinpath(self.title)
+        self.prefix = '{}/{}'.format(self.belong_to.name, self.title)
         if not self.path.exists():
             self.path.mkdir()
         logger.info('Created {}'.format(self.prefix))
@@ -227,7 +222,10 @@ class TwitterUser:
 
 
     def download(self):
+        self._create()
         entries = self.get_entries()
+        if not len(entries):
+            return
         latest = cdownload(entries, str(self.path))
 
         #print('calc time = %dms' % int((time.time() - start) * 1000))

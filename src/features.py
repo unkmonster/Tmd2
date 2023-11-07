@@ -4,17 +4,14 @@ from twitter.user import TwitterUser
 from twitter.list import TwitterList
 
 from src.utils.logger import logger
-from utils.exception import *
+from src.utils.exception import *
 from utils.utility import raise_if_error
 
-def download_user(screen_name: str, save_to = "other") -> bool:
-    local = TwitterList(-1, save_to, -1)
+
+def download_user(screen_name: str, save_to = "other", listid = -1) -> bool:
+    local = TwitterList(listid, save_to)
     usr = TwitterUser(screen_name, local)
-    try:
-        usr.download()
-    except TwUserError as err:
-        logger.warning(err.fmt_msg)
-        return False
+    usr.download()
     return True
 
 

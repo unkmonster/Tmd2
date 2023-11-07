@@ -13,6 +13,13 @@ class TwitterList:
     def __init__(self, rest_id, name = None, member_count = None) -> None:
         self.rest_id = str(rest_id)
         
+        if int(rest_id) < 0:
+            listmap = json.loads(project.listj_dir.read_text('utf-8'))
+            self.name = listmap[self.rest_id]['names'][0]
+            self.member_count = 0
+            self.path = config.store_dir.joinpath(self.name)
+            return
+            
         if name == None or member_count == None:
             ListByRestId.params['variables']['listId'] = self.rest_id
             params = {k: json.dumps(v) for k, v in ListByRestId.params.items()}              
@@ -85,19 +92,6 @@ class TwitterList:
                                 ListMembers.params['variables']['cursor'] = cur['content']['value']
                                 break
                     break
-    
-    
-    def tmp(self):
-        from user import TwitterUser
-        entries = self.get_members()
-        for entry in entries:
-                content = entry['content']
-                if content['entryType'] == 'TimelineTimelineItem':
-                    result = content['itemContent']['user_results']['result']
-                    TwitterUser(result['legacy']['screen_name'], 
-                                                                            self,
-                                                                            result['legacy']['name'],
-                                                                            result['rest_id'])
 
 
     def download(self):
@@ -106,18 +100,30 @@ class TwitterList:
             return
             
         from user import TwitterUser
-        from utils.exception import TWRequestError, TwUserError
+        from src.utils.exception import TWRequestError, TwUserError
         
-
         entries = self.get_members()
         count = 0
         os.system("title {} {}/{}".format(self.name, count, self.member_count))
         
-        def progress_update(f): # future callback
+        def progress_update(f: concurrent.futures.Future): # future callback
             nonlocal count
             count = count + 1
             os.system("title {} {}/{}".format(self.name, count, self.member_count))
 
+            exp = f.exception()
+            from src.features import follow_user
+            try:
+                if exp:
+                    raise exp
+            except TwUserError as err:
+                logger.warning(err.fmt_msg)
+                if err.reason == 'UserUnavailable':
+                    if follow_user(rest_id=err.user.rest_id):
+                        logger.info('Followed %s', err.user.title)
+            except TWRequestError as err:
+                logger.warning(err)
+            
 
         futures = [] 
         with concurrent.futures.ThreadPoolExecutor() as exc: 
@@ -126,22 +132,17 @@ class TwitterList:
                 if content['entryType'] == 'TimelineTimelineItem':
                     result = content['itemContent']['user_results']['result']
                     os.system("title {} {}/{}".format(self.name, count, self.member_count))
-                    
-                    future = exc.submit(TwitterUser.download, TwitterUser(result['legacy']['screen_name'], 
-                                                                            self,
-                                                                            result['legacy']['name'],
-                                                                            result['rest_id'])
-                    )
+                    try:
+                        usr = TwitterUser(
+                            result['legacy']['screen_name'], 
+                            self,result['legacy']['name'], 
+                            result['rest_id']
+                        )
+                    except TwUserError as err:
+                        logger.warning(err.fmt_msg())
+                        continue
+                    future = exc.submit(TwitterUser.download, usr)
                     future.add_done_callback(progress_update)
                     futures.append(future)
-                    
-        for res in concurrent.futures.as_completed(futures):
-            try:
-                res.exception()
-            except TWRequestError as err:
-                logger.warning(err)
-            except TwUserError as err:
-                logger.warning(err.fmt_msg())
-                if err.reason == 'UserUnavailable':
-                    print('需要关注')
-                    pass
+        
+        concurrent.futures.wait(futures)
