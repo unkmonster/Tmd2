@@ -145,19 +145,17 @@ class TwitterUser:
 
         try:
             res = session.get(UserMedia.api, params=params)
+            res.raise_for_status()
             raise_if_error(res)
-        except TWRequestError as er:
-            if res.status_code == requests.codes.TOO_MANY:
-                if int(res.headers['x-rate-limit-remaining']) > 0:
-                    logger.warning('此账号已被限制')
-                else:                
-                    limit_time = datetime.datetime.fromtimestamp(int(res.headers['x-rate-limit-reset']))
-                    logger.warning(
-                        'Reached rate-limit, have been waiting until {}'.format(limit_time.strftime("%Y-%m-%d %H:%M:%S")))
+        except requests.HTTPError:
+            if res.status_code == requests.codes.TOO_MANY and int(res.headers['x-rate-limit-remaining']) <= 0:                
+                flush_time = datetime.fromtimestamp(int(res.headers['x-rate-limit-reset']))
+                print('Reached rate-limit, wait until {}'.format(flush_time.strftime("%Y-%m-%d %H:%M:%S")))
 
-                    time.sleep(limit_time.timestamp() - datetime.datetime.now().timestamp())
+                time.sleep(flush_time.timestamp() - datetime.now().timestamp())
 
                 res = session.get(UserMedia.api, params=params)
+                res.raise_for_status()
                 raise_if_error(res)
             else:
                 raise
