@@ -3,7 +3,7 @@ import os
 from api import ListByRestId, ListMembers, Create
 
 from src.utils.logger import logger
-from utils.utility import raise_if_error
+from src.utils.utility import raise_if_error, get_following, get_entries
 from src.session import session
 from src.settings import *
 
@@ -11,34 +11,42 @@ import concurrent.futures
 
 from src.twitter.user import TwitterUser
 class TwitterList:
-    def __init__(self, rest_id, name = None) -> None:
-        self.rest_id = str(rest_id)
+    def __init__(self, *, rest_id=None, list:dict = None, name = None) -> None:
+        if not rest_id and not list:
+            raise ValueError('至少需要 rest_id 或 list')
+        
+        if rest_id:
+            self.rest_id = str(rest_id)
         
         if name == None:
-            if int(rest_id) < 0:
+            if rest_id and int(rest_id) < 0:
                 listmap = json.loads(project.listj_dir.read_text('utf-8'))
                 self.name = listmap[self.rest_id]['names'][0]
                 self.path = config.store_dir.joinpath(self.name)
                 return
-            else:
+            if not list:
                 ListByRestId.params['variables']['listId'] = self.rest_id
                 params = {k: json.dumps(v) for k, v in ListByRestId.params.items()}              
                 res = session.get(ListByRestId.api, params=params)
                 raise_if_error(res)
-
                 list = res.json()['data']['list']
-                name = list['name']
-
-
+            name = list['name']
+        
+        if not rest_id:
+            self.rest_id = list['id_str']
         self.name = name
         self.path = config.store_dir.joinpath(self.name)
 
+        self._create()
+
+    
+    def _create(self):
         if not self.is_exist():
             self.create_profile()
         else:
             self.update()
 
-    
+
     def is_exist(self) -> bool:
         return self.rest_id in json.loads(project.listj_dir.read_text('utf-8'))
 
@@ -66,7 +74,6 @@ class TwitterList:
 
     def get_members(self) -> list[TwitterUser]:
         if int(self.rest_id) == -2: # 关注中的
-            from src.features import get_following
             from src.session import account
             members = get_following(account.rest_id)
             self.member_count = len(members)
@@ -75,27 +82,14 @@ class TwitterList:
             print('本地列表不允许调用')
             return []
 
-        cursor = ''
+
         ListMembers.params['variables']['listId'] = self.rest_id
         ListMembers.params['variables']['count'] = 200
 
-        entries = []
-        while True:
-            ListMembers.params['variables']['cursor'] = cursor
-            res = session.get(ListMembers.api, json=ListMembers.params)
-            raise_if_error(res)
-
-            ets = res.json()['data']['list']['members_timeline']['timeline']['instructions'][-1]['entries']
-            cursors = [ets.pop(), ets.pop()]
-
-            if not len(ets):
-                break
-            entries.extend(ets)
-            for cur in cursors:
-                if cur['content']['cursorType'] == 'Bottom':
-                    cursor = cur['content']['value']
-                    break
-
+        entries = get_entries(
+            ListMembers, 
+            lambda j: j['data']['list']['members_timeline']['timeline']['instructions'][-1]['entries']
+        )
         self.member_count = len(entries)
         return [TwitterUser(result=entry['content']['itemContent']['user_results']['result']) for entry in entries]
                 

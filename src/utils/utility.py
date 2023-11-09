@@ -3,6 +3,8 @@ import requests
 import winshell
 from pathlib import Path
 
+
+timeformat = '%a %b %d %H:%M:%S %z %Y'
 # def download(url: str, overwrite: bool, *, path = '.', name = None, change_suffix = False) -> bool:
 #     res = requests.get(url, stream=True)
 
@@ -56,4 +58,43 @@ def handle_title(full_text: str) -> str:
     full_text = pattern.nonsupport.sub('', full_text)
     return full_text.strip()
 
-timeformat = '%a %b %d %H:%M:%S %z %Y'
+
+def get_entries(timeline_api, handler):
+    """可调用对象接受一个词典，返回提取出的 entries 列表"""
+    from src.session import session
+
+    cursor = ''
+    entries = []
+
+    while True:
+        timeline_api.params['variables']['cursor'] = cursor
+        res = session.get(
+            url=timeline_api.api,
+            json=timeline_api.params    
+        )
+        raise_if_error(res)
+        ets = handler(res.json())
+        
+        for i in range(len(ets) - 1, -1, -1):
+            if ets[i]['content']['__typename'] == 'TimelineTimelineCursor':
+                if 'Bottom' == ets[i]['content']['cursorType']:
+                    cursor = ets[i]['content']['value']
+                del ets[i]
+            else:
+                break
+
+        if not len(ets):
+            break
+        entries.extend(ets)
+    return entries
+
+from src.twitter.user import TwitterUser
+def get_following(rest_id: str) -> list[TwitterUser]:
+    from src.twitter.api import Following
+    Following.params['variables']['userId'] = rest_id
+    
+    entries = get_entries(
+        Following, 
+        lambda j: j['data']['user']['result']['timeline']['timeline']['instructions'][-1]['entries']
+    )
+    return [TwitterUser(result=entry['content']['itemContent']['user_results']['result']) for entry in entries]

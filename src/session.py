@@ -37,16 +37,16 @@ class Account:
 
 
 def add_cookie(cookie: str) -> bool:
-    if cookie not in config.cookie:
-        config.cookie.append(cookie)
+    if cookie not in config.cookies:
+        config.cookies.append(cookie)
         with project.cookie_dir.open('w') as f:
-            for ck in config.cookie:
+            for ck in config.cookies:
                 f.write(ck + '\n')
         return True
     print('cookie 已存在')
     return False
 
 
-account = Account.login(config.cookie[0])
+account = Account.login(config.cookies[0])
 session = account.session
 print('已登录:', account.screen_name)

@@ -5,30 +5,25 @@ from src.twitter.list import TwitterList
 
 from src.utils.logger import logger
 from src.utils.exception import *
-from src.utils.utility import raise_if_error
+from src.utils.utility import *
 
 
-def download_user(screen_name: str, save_to = "other", listid = -1) -> bool:
-    local = TwitterList(listid, save_to)
-    usr = TwitterUser(screen_name, local)
-    usr.download()
-    return True
+def download_user(screen_name: str, save_to = ".OTHER", listid = -1):
+    local = TwitterList(rest_id=listid, name=save_to)
+    usr = TwitterUser(screen_name=screen_name)
+    usr.download(local)
 
 
-def get_own_lists()-> list[dict]:
-    res = session.get(ListManagementPageTimeline.api, json=ListManagementPageTimeline.params)
-    raise_if_error(res)
+def get_own_lists()-> list[TwitterList]:
+    entries = get_entries(
+        ListManagementPageTimeline, 
+        lambda j: j['data']['viewer']['list_management_timeline']['timeline']['instructions'][-1]['entries']
+    )
 
-    items = res.json()['data']['viewer']['list_management_timeline']['timeline']['instructions'][3]['entries'][2]['content']['items']
-    results = []
-    for item in items:
-        result = {}
-        list = item['item']['itemContent']['list']
-        result['name'] = list['name']
-        result['rest_id'] = list['id_str']
-        result['member_count'] = list['member_count']
-        results.append(result)
-    return results
+    for entry in entries:
+        if entry['entryId'] == 'owned-subscribed-list-module-0':
+            items = entry['content']['items']
+            return [TwitterList(list=i['item']['itemContent']['list']) for i in items]
 
 
 def follow_user(screen_name = None, rest_id = None) -> bool:
@@ -59,33 +54,6 @@ def user_to_list(user_id: str, list_id: str) -> bool:
         return True
 
 
-def get_following(rest_id: str) -> list[TwitterUser]:
-    results = list()
-    
-    def get_timeline(cursor = None):
-        nonlocal rest_id
-        nonlocal results
-
-        Following.params['variables']['userId'] = rest_id
-        if cursor:
-            Following.params['variables']['cursor'] = cursor
-        res = session.get(Following.api, json=Following.params)
-        raise_if_error(res)
-
-        entries = res.json()['data']['user']['result']['timeline']['timeline']['instructions'][-1]['entries']
-        before = len(results)
-        
-        for entry in entries:
-                if entry['content']['entryType'] == 'TimelineTimelineCursor':
-                     if entry['content']['cursorType'] == 'Bottom' and len(results) != before:
-                          get_timeline(entry['content']['value'])
-                else:
-                     results.append(entry['content']['itemContent']['user_results']['result'])
-
-    get_timeline()
-    return [TwitterUser(result=result) for result in results]
-
-
 def download_following(save_to = '.FOLLOWING'):
-    tl = TwitterList(-2, save_to)
+    tl = TwitterList(rest_id=-2, name=save_to)
     tl.download()
