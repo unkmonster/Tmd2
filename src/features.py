@@ -1,7 +1,7 @@
-from twitter.api import *
+from src.twitter.api import *
 from src.session import session
-from twitter.user import TwitterUser
-from twitter.list import TwitterList
+from src.twitter.user import TwitterUser
+from src.twitter.list import TwitterList
 
 from src.utils.logger import logger
 from src.utils.exception import *
@@ -57,3 +57,35 @@ def user_to_list(user_id: str, list_id: str) -> bool:
             logger.warning(err)
             return False
         return True
+
+
+def get_following(rest_id: str) -> list[TwitterUser]:
+    results = list()
+    
+    def get_timeline(cursor = None):
+        nonlocal rest_id
+        nonlocal results
+
+        Following.params['variables']['userId'] = rest_id
+        if cursor:
+            Following.params['variables']['cursor'] = cursor
+        res = session.get(Following.api, json=Following.params)
+        raise_if_error(res)
+
+        entries = res.json()['data']['user']['result']['timeline']['timeline']['instructions'][-1]['entries']
+        before = len(results)
+        
+        for entry in entries:
+                if entry['content']['entryType'] == 'TimelineTimelineCursor':
+                     if entry['content']['cursorType'] == 'Bottom' and len(results) != before:
+                          get_timeline(entry['content']['value'])
+                else:
+                     results.append(entry['content']['itemContent']['user_results']['result'])
+
+    get_timeline()
+    return [TwitterUser(result=result) for result in results]
+
+
+def download_following(save_to = '.FOLLOWING'):
+    tl = TwitterList(-2, save_to)
+    tl.download()

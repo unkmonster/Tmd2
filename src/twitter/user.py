@@ -18,37 +18,40 @@ rwlock =  rwlock.RWLockFair()
 
 
 class TwitterUser:
-    from twitter.list import TwitterList
-    def __init__(self, screen_name: str, belong_to: TwitterList=None, name=None, rest_id=None) -> None:
+    def __init__(self, result =None, screen_name = None, name=None, rest_id=None) -> None:
         """ 账号不存在或账号被暂停,或受保护账号，抛出UserError
         """
         from src.utils import pattern
 
         # 如果 name 或 rest_id 未指定，则利用 screen_name 获取
         if (name or rest_id) == None:
-            UserByScreenName.params['variables']['screen_name'] = screen_name
-            res = session.get(UserByScreenName.api, json=UserByScreenName.params)
-            raise_if_error(res)
+            if not result:
+                UserByScreenName.params['variables']['screen_name'] = screen_name
+                res = session.get(UserByScreenName.api, json=UserByScreenName.params)
+                raise_if_error(res)
 
-            if 'user' in res.json()['data']:
-                result = res.json()['data']['user']['result']
-                if 'UserUnavailable' == result['__typename']:
-                    raise TwUserError(self, 'UserUnavailable')
-                if 'protected' in result['legacy'] and result['legacy']['protected'] == True:
-                    raise TwUserError(self, 'These Tweets are protected')
-                name = res.json()['data']['user']['result']['legacy']['name']
-                rest_id = res.json()['data']['user']['result']['rest_id']
-            else:
-                raise TWRequestError(screen_name, "Account doesn't exist")
-
+                if 'user' in res.json()['data']:
+                    result = res.json()['data']['user']['result']
+                else:
+                    raise TWRequestError(screen_name, "Account doesn't exist")
+               
+            if 'UserUnavailable' == result['__typename']:
+                raise TwUserError(self, 'UserUnavailable')
+            # if 'protected' in result['legacy'] and result['legacy']['protected'] == True:
+            #     raise TwUserError(self, 'These Tweets are protected')
+            name = result['legacy']['name']
+            rest_id = result['rest_id']
+            screen_name = result['legacy']['screen_name']
+    
         self.screen_name = screen_name
         self.name = name
         self.rest_id = rest_id
         self.title = f'{pattern.nonsupport.sub("", self.name)}({self.screen_name})'
-        self.belong_to = belong_to
 
         
-    def _create(self):
+    def _create(self, belong_to):
+        self.belong_to = belong_to
+
         if self._is_exist():
             self._update()
         else:
@@ -65,13 +68,12 @@ class TwitterUser:
 
     # 异常安全
     def _update(self):
-        from twitter.list import TwitterList
+        from src.twitter.list import TwitterList
         lock = rwlock.gen_wlock()
 
         lock.acquire()
         try:
             users = json.loads(project.usersj_dir.read_text('utf-8'))
-            
             creater = TwitterList(users[self.rest_id]['belong_to'][0])
 
             # 更新用户名
@@ -138,6 +140,8 @@ class TwitterUser:
     def get_timeline(self, count=50, cursor="") -> list:
         """返回时间线(list)
         """
+        from requests import HTTPError
+
         UserMedia.params['variables']['userId'] = self.rest_id
         UserMedia.params['variables']['count'] = count
         UserMedia.params['variables']['cursor'] = cursor
@@ -147,8 +151,8 @@ class TwitterUser:
             res = session.get(UserMedia.api, params=params)
             res.raise_for_status()
             raise_if_error(res)
-        except requests.HTTPError:
-            if res.status_code == requests.codes.TOO_MANY and int(res.headers['x-rate-limit-remaining']) <= 0:                
+        except HTTPError:
+            if res.status_code == 429 and int(res.headers['x-rate-limit-remaining']) <= 0:                
                 flush_time = datetime.fromtimestamp(int(res.headers['x-rate-limit-reset']))
                 print('Reached rate-limit, wait until {}'.format(flush_time.strftime("%Y-%m-%d %H:%M:%S")))
 
@@ -159,6 +163,7 @@ class TwitterUser:
                 raise_if_error(res)
             else:
                 raise
+
         try:
             if res.json()['data']['user']['result']['__typename'] == 'UserUnavailable':
                 raise TwUserError(self, 'User has been protected')
@@ -228,12 +233,12 @@ class TwitterUser:
         return items
 
 
-    def download(self):
+    def download(self, belong_to):
         import pythoncom
         pythoncom.CoInitialize()
 
         try:
-            self._create()
+            self._create(belong_to)
             entries = self.get_entries()
             if not len(entries):
                 return

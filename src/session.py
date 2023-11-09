@@ -10,6 +10,7 @@ from dataclasses import dataclass
 class Account:
     session: requests.Session
     screen_name: str
+    rest_id: str
 
     @classmethod
     def login(cls, cookie):
@@ -32,7 +33,7 @@ class Account:
         session.cookies.update(cookie)
 
         r = session.get(Settings.api, timeout=10)
-        return cls(session, r.json()['screen_name'])
+        return cls(session, r.json()['screen_name'], cookie['twid'][4:]) # u%3d
 
 
 def add_cookie(cookie: str) -> bool:

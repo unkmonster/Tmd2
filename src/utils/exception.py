@@ -6,8 +6,7 @@ class TWRequestError(RuntimeError):
 
 
 class TwUserError(RuntimeError):
-    from src.twitter.user import TwitterUser
-    def __init__(self, user: TwitterUser, reason: str) -> None:
+    def __init__(self, user, reason: str) -> None:
         self.reason = reason
         self.user = user
     
