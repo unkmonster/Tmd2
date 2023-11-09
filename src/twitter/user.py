@@ -5,7 +5,6 @@ from datetime import datetime, timezone, timedelta
 
 from api import UserByScreenName, UserMedia
 from src.utils.exception import *
-from src.utils.utility import *
 from src.utilitycpp import *
 from src.utils.logger import logger
 
@@ -22,6 +21,7 @@ class TwitterUser:
         """ 账号不存在或账号被暂停,或受保护账号，抛出UserError
         """
         from src.utils import pattern
+        from src.utils.utility import raise_if_error
 
         # 如果 name 或 rest_id 未指定，则利用 screen_name 获取
         if (name or rest_id) == None:
@@ -68,18 +68,21 @@ class TwitterUser:
 
     # 异常安全
     def _update(self):
+        from src.utils.utility import raise_if_error, create_shortcut
         from src.twitter.list import TwitterList
         lock = rwlock.gen_wlock()
 
         lock.acquire()
         try:
             users = json.loads(project.usersj_dir.read_text('utf-8'))
-            creater = TwitterList(users[self.rest_id]['belong_to'][0])
+            creater = TwitterList(rest_id=users[self.rest_id]['belong_to'][0])
 
             # 更新用户名
             renamed = False
             latest_name = users[self.rest_id]['names'][-1]
             if self.title != latest_name:
+                if not creater.path.joinpath(latest_name).exists():
+                    creater.path.joinpath(latest_name).mkdir()
                 creater.path.joinpath(latest_name).rename(creater.path.joinpath(self.title))
                 users[self.rest_id]['names'].append(self.title)
                 project.usersj_dir.write_text(json.dumps(users, indent=4, allow_nan=True, ensure_ascii=False), 'utf-8')
@@ -141,6 +144,7 @@ class TwitterUser:
         """返回时间线(list)
         """
         from requests import HTTPError
+        from src.utils.utility import raise_if_error
 
         UserMedia.params['variables']['userId'] = self.rest_id
         UserMedia.params['variables']['count'] = count
@@ -162,6 +166,7 @@ class TwitterUser:
                 res.raise_for_status()
                 raise_if_error(res)
             else:
+                logger.error(res.text)
                 raise
 
         try:
@@ -172,7 +177,7 @@ class TwitterUser:
             raise TwUserError(self, 'UserUnavailable')
 
 
-    def get_entries(self) -> list[Tweet]:
+    def get_tweets(self) -> list[Tweet]:
         def max_bitrate(variants)->str:
             """ 用于获取最高比特率的视频
             """
@@ -184,7 +189,8 @@ class TwitterUser:
                     max[1] = v['url']
             return max[1]
         
-        
+        from src.utils.utility import timeformat, handle_title
+
         items = []
         latest_timestamp = datetime.strptime(self.latest, timeformat).timestamp()
 
@@ -235,11 +241,12 @@ class TwitterUser:
 
     def download(self, belong_to):
         import pythoncom
+        from src.utils.utility import timeformat
         pythoncom.CoInitialize()
 
         try:
             self._create(belong_to)
-            entries = self.get_entries()
+            entries = self.get_tweets()
             if not len(entries):
                 return
             latest = cdownload(entries, str(self.path))

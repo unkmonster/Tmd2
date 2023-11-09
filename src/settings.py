@@ -15,7 +15,7 @@ class Project:
 
 @dataclass
 class Config:
-    cookie: list[str]
+    cookies: list[str]
     authorization: str
 
     store_dir: Path
