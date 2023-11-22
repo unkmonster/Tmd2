@@ -10,6 +10,7 @@ from src.settings import *
 import concurrent.futures  
 
 from src.twitter.user import TwitterUser
+
 class TwitterList:
     def __init__(self, *, rest_id=None, list:dict = None, name = None) -> None:
         if not rest_id and not list:
@@ -21,7 +22,7 @@ class TwitterList:
         if name == None:
             if rest_id and int(rest_id) < 0:
                 listmap = json.loads(project.listj_dir.read_text('utf-8'))
-                self.name = listmap[self.rest_id]['names'][0]
+                self.name = listmap[self.rest_id]['names'][-1]
                 self.path = config.store_dir.joinpath(self.name)
                 return
             if not list:
@@ -37,8 +38,6 @@ class TwitterList:
         self.name = name
         self.path = config.store_dir.joinpath(self.name)
 
-        self._create()
-
     
     def _create(self):
         if not self.is_exist():
@@ -53,12 +52,12 @@ class TwitterList:
 
     def update(self):
         listmap = json.loads(project.listj_dir.read_text('utf-8'))
-        if self.name != listmap[self.rest_id]['names'][0]:
-            config.store_dir.joinpath(listmap[self.rest_id]['names'][0]).rename(self.path)
-            listmap[self.rest_id]["names"].insert(0, self.name)
+        if self.name != listmap[self.rest_id]['names'][-1]:
+            if not config.store_dir.joinpath(listmap[self.rest_id]['names'][-1]).exists():
+                config.store_dir.joinpath(listmap[self.rest_id]['names'][-1]).mkdir()
+            config.store_dir.joinpath(listmap[self.rest_id]['names'][-1]).rename(self.path)
+            listmap[self.rest_id]["names"].append(self.name)
             project.listj_dir.write_text(json.dumps(listmap, ensure_ascii=False, indent=4, separators=(',', ': ')), 'utf-8')
-        if not self.path.exists():
-            self.path.mkdir(parents=True)
 
 
     def create_profile(self):
@@ -100,7 +99,8 @@ class TwitterList:
             return
             
         from src.utils.exception import TWRequestError, TwUserError
-        
+        self._create()
+
         members = self.get_members()
         count = 0
         

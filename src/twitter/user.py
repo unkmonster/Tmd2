@@ -81,6 +81,8 @@ class TwitterUser:
             renamed = False
             latest_name = users[self.rest_id]['names'][-1]
             if self.title != latest_name:
+                if not creater.path.joinpath(latest_name).exists():
+                    creater.path.joinpath(latest_name).mkdir()
                 creater.path.joinpath(latest_name).rename(creater.path.joinpath(self.title))
                 users[self.rest_id]['names'].append(self.title)
                 project.usersj_dir.write_text(json.dumps(users, indent=4, allow_nan=True, ensure_ascii=False), 'utf-8')
@@ -164,6 +166,7 @@ class TwitterUser:
                 res.raise_for_status()
                 raise_if_error(res)
             else:
+                logger.error(res.text)
                 raise
 
         try:
