@@ -88,6 +88,7 @@ def get_entries(timeline_api, handler):
         entries.extend(ets)
     return entries
 
+
 from src.twitter.user import TwitterUser
 def get_following(rest_id: str) -> list[TwitterUser]:
     from src.twitter.api import Following

@@ -43,7 +43,7 @@ logger = logging.getLogger("rich")
 logger.setLevel(logging.DEBUG)
 
 # create handler
-today = date.today().strftime('%Y-%m-%d')
+today = date.today().strftime('%Y-%m')
 log_path = project.logs_dir.joinpath('{}.log'.format(today))
 
 sh = MyHandler(sys.stdout)

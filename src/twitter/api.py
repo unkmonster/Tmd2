@@ -1,24 +1,26 @@
+from dataclasses import dataclass
+
 class UserMedia:
-    api = 'https://twitter.com/i/api/graphql/fswZGPS7zuksnISWCMvz3Q/UserMedia'
-    
-    params = dict(
-        variables =  {
-            "userId": "",
-            "count": 50,
-            "includePromotedContent": False,
-            "withClientEventToken": False,
-            "withBirdwatchNotes": False,
-            "withVoice": True,
-            "withV2Timeline": True,
-            "cursor": ""
-        },
-        features =  {
-            "rweb_lists_timeline_redesign_enabled": True,
+    api = 'https://twitter.com/i/api/graphql/oMVVrI5kt3kOpyHHTTKf5Q/UserMedia'
+    def __init__(self) -> None:
+        self.params = dict(
+            variables =  {
+                "userId": "",
+                "count": 50,
+                "includePromotedContent": False,
+                "withClientEventToken": False,
+                "withBirdwatchNotes": False,
+                "withVoice": True,
+                "withV2Timeline": True,
+                "cursor": ""
+            },
+            features =  {
             "responsive_web_graphql_exclude_directive_enabled": True,
             "verified_phone_label_enabled": False,
             "creator_subscriptions_tweet_preview_api_enabled": True,
             "responsive_web_graphql_timeline_navigation_enabled": True,
             "responsive_web_graphql_skip_user_profile_image_extensions_enabled": False,
+            "c9s_tweet_anatomy_moderator_badge_enabled": True,
             "tweetypie_unmention_optimization_enabled": True,
             "responsive_web_edit_tweet_api_enabled": True,
             "graphql_is_translatable_rweb_tweet_is_translatable_enabled": True,
@@ -29,18 +31,15 @@ class UserMedia:
             "freedom_of_speech_not_reach_fetch_enabled": True,
             "standardized_nudges_misinfo": True,
             "tweet_with_visibility_results_prefer_gql_limited_actions_policy_enabled": True,
+            "rweb_video_timestamps_enabled": True,
             "longform_notetweets_rich_text_read_enabled": True,
             "longform_notetweets_inline_media_enabled": True,
             "responsive_web_media_download_video_enabled": False,
             "responsive_web_enhance_cards_enabled": False
-        },
-        fieldToggles =  {
-            "withAuxiliaryUserLabels":False,
-            "withArticleRichContentState":False
-        }
-    )
+            }
+        )
+    
         
-
 class UserByScreenName:
     api = 'https://twitter.com/i/api/graphql/xc8f1g7BYqr6VTzTbvNlGw/UserByScreenName'
 

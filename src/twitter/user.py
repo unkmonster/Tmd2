@@ -8,7 +8,6 @@ from src.utils.exception import *
 from src.utilitycpp import *
 from src.utils.logger import logger
 
-from src.session import session
 from src.settings import *
 from readerwriterlock import rwlock
 
@@ -22,6 +21,7 @@ class TwitterUser:
         """
         from src.utils import pattern
         from src.utils.utility import raise_if_error
+        from src.session import session
 
         # 如果 name 或 rest_id 未指定，则利用 screen_name 获取
         if (name or rest_id) == None:
@@ -140,44 +140,10 @@ class TwitterUser:
         logger.info('Created {}'.format(self.prefix))
 
 
-    def get_timeline(self, count=50, cursor="") -> list:
+    def get_tweets(self) -> list:
         """返回时间线(list)
         """
-        from requests import HTTPError
-        from src.utils.utility import raise_if_error
-
-        UserMedia.params['variables']['userId'] = self.rest_id
-        UserMedia.params['variables']['count'] = count
-        UserMedia.params['variables']['cursor'] = cursor
-        params = {k: json.dumps(v) for k, v in UserMedia.params.items()}
-
-        try:
-            res = session.get(UserMedia.api, params=params)
-            res.raise_for_status()
-            raise_if_error(res)
-        except HTTPError:
-            if res.status_code == 429 and int(res.headers['x-rate-limit-remaining']) <= 0:                
-                flush_time = datetime.fromtimestamp(int(res.headers['x-rate-limit-reset']))
-                print('Reached rate-limit, wait until {}'.format(flush_time.strftime("%Y-%m-%d %H:%M:%S")))
-
-                time.sleep(flush_time.timestamp() - datetime.now().timestamp())
-
-                res = session.get(UserMedia.api, params=params)
-                res.raise_for_status()
-                raise_if_error(res)
-            else:
-                logger.error(res.text)
-                raise
-
-        try:
-            if res.json()['data']['user']['result']['__typename'] == 'UserUnavailable':
-                raise TwUserError(self, 'User has been protected')
-            return res.json()['data']['user']['result']['timeline_v2']['timeline']['instructions'][0]['entries']
-        except KeyError:
-            raise TwUserError(self, 'UserUnavailable')
-
-
-    def get_tweets(self) -> list[Tweet]:
+        
         def max_bitrate(variants)->str:
             """ 用于获取最高比特率的视频
             """
@@ -189,54 +155,91 @@ class TwitterUser:
                     max[1] = v['url']
             return max[1]
         
-        from src.utils.utility import timeformat, handle_title
+        from requests import HTTPError
+        from src.utils.utility import raise_if_error, timeformat, handle_title
+        from src.session import session
+        after = datetime.strptime(self.latest, timeformat).timestamp()
+        um = UserMedia()
 
-        items = []
-        latest_timestamp = datetime.strptime(self.latest, timeformat).timestamp()
+        tweets = []
+        cursor = ""
+        um.params['variables']['userId'] = self.rest_id
+        um.params['variables']['count'] = 20
+        
+        while True:
+            um.params['variables']['cursor'] = cursor
 
-        entries = self.get_timeline()
-        while len(entries) > 2:
-            # 遍历推文
-            for entry in entries:
-                content = entry['content']
+            try:
+                res = session.get(um.api, json=um.params)
+                res.raise_for_status()
+                raise_if_error(res)
+            except HTTPError:
+                if res.status_code == 429 and int(res.headers['x-rate-limit-remaining']) <= 0:                
+                    flush_time = datetime.fromtimestamp(int(res.headers['x-rate-limit-reset']))
+                    print('Reached rate-limit, wait until {}'.format(flush_time.strftime("%Y-%m-%d %H:%M:%S")))
 
-                if content['entryType'] == 'TimelineTimelineItem':
-                    result = content['itemContent']['tweet_results'].get('result')
-                    if result == None or result['__typename'] == 'TweetTombstone':
-                        continue
-                    if result['__typename'] == 'TweetWithVisibilityResults':
-                        legacy = result['tweet']['legacy']
-                    else:
-                        legacy = result['legacy']
+                    time.sleep(flush_time.timestamp() - datetime.now().timestamp())
 
-                    if (
-                        datetime.strptime(legacy['created_at'], timeformat).timestamp() <= 
-                        latest_timestamp
-                    ):
-                        entries.clear()
-                        break
-                    
-                    title = handle_title(legacy['full_text'])
-                    medias = legacy.get('extended_entities')
-                    if medias == None:
-                        continue
-                    else:
-                        medias = medias['media']
+                    res = session.get(um.api, json=um.params)
+                    res.raise_for_status()
+                    raise_if_error(res)
+                else:
+                    logger.error(res.text)
+                    raise
 
-                    urls = []
-                    for m in medias:
-                        match m['type']:
-                            case 'photo':
-                                urls.append(m['media_url_https'])
-                            case 'video':
-                                urls.append(max_bitrate(m['video_info']['variants']))
-                    items.append(Tweet(title, urls, legacy['created_at']))
-                    pass
-                # 翻页   
-                elif content['entryType'] == 'TimelineTimelineCursor':
-                    if content['cursorType'] == 'Bottom':
-                        entries = self.get_timeline(cursor=content['value'])
-        return items
+            if not len(tweets):
+                try:
+                    if res.json()['data']['user']['result']['__typename'] == 'UserUnavailable':
+                        raise TwUserError(self, 'UserUnavailable')
+                except KeyError:
+                    raise TwUserError(self, 'UserUnavailable')
+            
+            modules = []
+
+            for ins in res.json()['data']['user']['result']['timeline_v2']['timeline']['instructions']:
+                if ins['type'] == 'TimelineAddEntries':
+                    for e in ins['entries']:
+                        if e['content']['__typename'] == 'TimelineTimelineCursor' and e['content']['cursorType'] == 'Bottom':
+                            cursor = e['content']['value']
+                        elif e['content']['__typename'] == 'TimelineTimelineModule' and  um.params['variables']['cursor'] == '':
+                            modules = e['content']['items']
+
+                elif ins['type'] == 'TimelineAddToModule':
+                    modules = ins['moduleItems']
+            
+            if not len(modules):
+                return tweets
+            
+            for item in modules:
+                result = item['item']['itemContent']['tweet_results'].get('result')
+                if result == None or result['__typename'] == 'TweetTombstone':
+                    continue
+                if result['__typename'] == 'TweetWithVisibilityResults':
+                    legacy = result['tweet']['legacy']
+                else:
+                    legacy = result['legacy']
+                
+                if (
+                    datetime.strptime(legacy['created_at'], timeformat).timestamp() <= 
+                    after
+                ):
+                    return tweets
+
+                title = handle_title(legacy['full_text'])
+                medias = legacy.get('extended_entities')
+                if medias == None:
+                    continue
+                else:
+                    medias = medias['media']
+
+                urls = []
+                for m in medias:
+                    match m['type']:
+                        case 'photo':
+                            urls.append(m['media_url_https'])
+                        case 'video':
+                            urls.append(max_bitrate(m['video_info']['variants']))
+                tweets.append(Tweet(title, urls, legacy['created_at']))
 
 
     def download(self, belong_to):
@@ -249,6 +252,7 @@ class TwitterUser:
             entries = self.get_tweets()
             if not len(entries):
                 return
+            #print(self.prefix, len(entries))
             latest = cdownload(entries, str(self.path))
 
             #print('calc time = %dms' % int((time.time() - start) * 1000))

@@ -14,6 +14,7 @@ class Account:
 
     @classmethod
     def login(cls, cookie):
+        from src.utils.utility import raise_if_error
         session = requests.session()
         retries = Retry(
             backoff_factor=0.1,
@@ -33,6 +34,7 @@ class Account:
         session.cookies.update(cookie)
 
         r = session.get(Settings.api, timeout=10)
+        raise_if_error(r)
         return cls(session, r.json()['screen_name'], cookie['twid'][4:]) # u%3d
 
 

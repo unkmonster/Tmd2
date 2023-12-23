@@ -123,9 +123,10 @@ class TwitterList:
                 if exp:
                     raise exp
             except TwUserError as err:
-                logger.warning(err.fmt_msg)
                 if err.reason == 'UserUnavailable':
                     if follow_user(rest_id=err.user.rest_id):
                         logger.info('Followed %s', err.user.title)
+                    continue
+                logger.warning(err.fmt_msg)
             except TWRequestError as err:
                 logger.warning(err)
