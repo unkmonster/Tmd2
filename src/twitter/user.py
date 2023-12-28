@@ -16,36 +16,30 @@ rwlock =  rwlock.RWLockFair()
 
 
 class TwitterUser:
-    def __init__(self, result =None, screen_name = None, name=None, rest_id=None) -> None:
+    def __init__(self, result =None, screen_name = None, rest_id = None) -> None:
         """ 账号不存在或账号被暂停,或受保护账号，抛出UserError
         """
         from src.utils import pattern
-        from src.utils.utility import raise_if_error
+        from src.utils.utility import raise_if_error, get_user_result
         from src.session import session
+        
+        if not result and not screen_name and not rest_id:
+            raise ValueError
+        
+        if not result:
+            result = get_user_result(screen_name=screen_name) if screen_name else get_user_result(userId = rest_id)
+            
+        if 'UserUnavailable' == result['__typename']:
+            if screen_name:
+                result['screen_name'] = screen_name
+            if rest_id and 'rest_id' not in result:
+                result['rest_id'] = rest_id
+            raise TwUserError(**result)
 
-        # 如果 name 或 rest_id 未指定，则利用 screen_name 获取
-        if (name or rest_id) == None:
-            if not result:
-                UserByScreenName.params['variables']['screen_name'] = screen_name
-                res = session.get(UserByScreenName.api, json=UserByScreenName.params)
-                raise_if_error(res)
-
-                if 'user' in res.json()['data']:
-                    result = res.json()['data']['user']['result']
-                else:
-                    raise TWRequestError(screen_name, "Account doesn't exist")
-               
-            if 'UserUnavailable' == result['__typename']:
-                raise TwUserError(self, 'UserUnavailable')
-            # if 'protected' in result['legacy'] and result['legacy']['protected'] == True:
-            #     raise TwUserError(self, 'These Tweets are protected')
-            name = result['legacy']['name']
-            rest_id = result['rest_id']
-            screen_name = result['legacy']['screen_name']
     
-        self.screen_name = screen_name
-        self.name = name
-        self.rest_id = rest_id
+        self.screen_name = result['legacy']['screen_name']
+        self.name = result['legacy']['name']
+        self.rest_id = result['rest_id']
         self.title = f'{pattern.nonsupport.sub("", self.name)}({self.screen_name})'
 
         

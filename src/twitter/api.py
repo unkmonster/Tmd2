@@ -65,6 +65,30 @@ class UserByScreenName:
     )
 
 
+class UserByRestId:
+    api = 'https://twitter.com/i/api/graphql/CO4_gU4G_MRREoqfiTh6Hg/UserByRestId'
+
+    def __init__(self) -> None:
+        self.params = dict(
+            variables = {
+                "userId": "",
+                "withSafetyModeUserFields": True
+            },
+            features = {
+                "hidden_profile_likes_enabled":True,
+                "hidden_profile_subscriptions_enabled":True,
+                "responsive_web_graphql_exclude_directive_enabled":True,
+                "verified_phone_label_enabled":False,
+                "highlights_tweets_tab_ui_enabled":True,
+                "responsive_web_twitter_article_notes_tab_enabled":False,
+                "creator_subscriptions_tweet_preview_api_enabled":True,
+                "responsive_web_graphql_skip_user_profile_image_extensions_enabled":False,
+                "responsive_web_graphql_timeline_navigation_enabled":True
+            }
+        )
+        pass
+
+
 class ListMembers:
     api = 'https://twitter.com/i/api/graphql/1icjxQY7vy1IQQyY8Sr7iw/ListMembers'
 
@@ -99,8 +123,8 @@ class ListMembers:
     )
 
 
-# Info of list
 class ListByRestId:
+    """Info of list"""
     api = 'https://twitter.com/i/api/graphql/gO1_eYPohKYHwCG2m-1ZnQ/ListByRestId'
 
     params = dict(

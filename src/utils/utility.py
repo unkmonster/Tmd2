@@ -62,6 +62,7 @@ def handle_title(full_text: str) -> str:
 def get_entries(timeline_api, handler):
     """可调用对象接受一个词典，返回提取出的 entries 列表"""
     from src.session import session
+    import time
 
     cursor = ''
     entries = []
@@ -90,12 +91,47 @@ def get_entries(timeline_api, handler):
 
 
 from src.twitter.user import TwitterUser
+
 def get_following(rest_id: str) -> list[TwitterUser]:
     from src.twitter.api import Following
+    from src.utils.exception import TwUserError
+
     Following.params['variables']['userId'] = rest_id
     
     entries = get_entries(
         Following, 
         lambda j: j['data']['user']['result']['timeline']['timeline']['instructions'][-1]['entries']
     )
-    return [TwitterUser(result=entry['content']['itemContent']['user_results']['result']) for entry in entries]
+    print(F'{len(entries)=}')
+
+    users = []
+    unavailable = []
+
+    for entry in entries:
+        try:
+            users.append(TwitterUser(result=entry['content']['itemContent']['user_results']['result']))
+        except KeyError:
+            users.append(TwitterUser(rest_id=entry['entryId'][5:]))
+        except TwUserError as er:
+            print(er.fmt_msg)
+            unavailable.append(entry['entryId'])
+    return users
+
+
+def get_user_result(**kwd):
+    """userId"""
+    from src.twitter.api import UserByScreenName, UserByRestId
+    from src.session import session
+    from src.utils.exception import TWRequestError, TwUserError
+
+    param = kwd.popitem()
+    api = UserByRestId() if param[0] == 'userId' else UserByScreenName()
+
+    api.params['variables'][param[0]] = str(param[1])
+    res = session.get(api.api, json=api.params)
+    raise_if_error(res)
+
+    if 'user' in res.json()['data']:
+        return res.json()['data']['user']['result']
+    else:
+        raise TWRequestError(param[1], "Account doesn't exist")

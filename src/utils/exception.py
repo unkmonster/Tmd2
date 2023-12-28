@@ -6,10 +6,11 @@ class TWRequestError(RuntimeError):
 
 
 class TwUserError(RuntimeError):
-    def __init__(self, user, reason: str) -> None:
+    def __init__(self, reason, message, **kwds) -> None:
         self.reason = reason
-        self.user = user
+        self.message = message
+        self.user = kwds
     
     @property
     def fmt_msg(self):
-        return '{} {}: {}'.format(self.user.prefix, self.user.rest_id, self.reason)
+        return '{}: {}'.format(self.user, self.message)
