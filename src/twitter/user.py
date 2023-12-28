@@ -24,7 +24,7 @@ class TwitterUser:
         from src.session import session
         
         if not result and not screen_name and not rest_id:
-            raise ValueError
+            raise TypeError
         
         if not result:
             result = get_user_result(screen_name=screen_name) if screen_name else get_user_result(userId = rest_id)
@@ -133,7 +133,7 @@ class TwitterUser:
         self.prefix = '{}/{}'.format(self.belong_to.name, self.title)
         logger.info('Created {}'.format(self.prefix))
 
-
+    
     def get_tweets(self) -> list:
         """返回时间线(list)
         """
@@ -160,9 +160,10 @@ class TwitterUser:
         um.params['variables']['userId'] = self.rest_id
         um.params['variables']['count'] = 20
         
+        logger.debug('Getting timeline for %s', self.title)
         while True:
             um.params['variables']['cursor'] = cursor
-
+            um.params['variables']['count'] = 200 if cursor != "" else 20
             try:
                 res = session.get(um.api, json=um.params)
                 res.raise_for_status()
@@ -179,14 +180,14 @@ class TwitterUser:
                     raise_if_error(res)
                 else:
                     logger.error(res.text)
-                    raise
+                    os._exit(1)
 
             if not len(tweets):
                 try:
                     if res.json()['data']['user']['result']['__typename'] == 'UserUnavailable':
-                        raise TwUserError(self, 'UserUnavailable')
+                        raise TwUserError(**res.json()['data']['user']['result'])
                 except KeyError:
-                    raise TwUserError(self, 'UserUnavailable')
+                    raise TwUserError('UserUnavailable', 'unknown', screen_name= self.screen_name, rid = self.rest_id)
             
             modules = []
 

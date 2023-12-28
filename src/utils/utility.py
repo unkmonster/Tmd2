@@ -53,7 +53,6 @@ def handle_title(full_text: str) -> str:
     from src.utils import pattern
     full_text = pattern.url.sub('', full_text)
     full_text = pattern.at.sub('', full_text)
-    full_text = pattern.tag.sub('', full_text)
     full_text = pattern.enter.sub(' ', full_text)
     full_text = pattern.nonsupport.sub('', full_text)
     return full_text.strip()

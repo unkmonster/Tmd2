@@ -1,11 +1,6 @@
 __pycache__
-src/core.py
-src/test.py
-src/test.pyw
 .vscode
-run.bat
-json
 tests/main.py
-site-packages
 task.bat
 Tmd2.lnk
+.venv

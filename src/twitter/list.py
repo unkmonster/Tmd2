@@ -2,7 +2,6 @@ import json
 import os
 from api import ListByRestId, ListMembers, Create
 
-from src.utils.logger import logger
 from src.utils.utility import raise_if_error, get_following, get_entries
 from src.session import session
 from src.settings import *
@@ -12,6 +11,8 @@ import concurrent.futures
 from src.twitter.user import TwitterUser
 
 class TwitterList:
+    """负数 ID 为非 Twitter 列表"""
+
     def __init__(self, *, rest_id=None, list:dict = None, name = None) -> None:
         if not rest_id and not list:
             raise ValueError('至少需要 rest_id 或 list')
@@ -71,62 +72,12 @@ class TwitterList:
         project.listj_dir.write_text(json.dumps(listmap, ensure_ascii=False, indent=4, separators=(',', ': ')), 'utf-8')
 
 
-    def get_members(self) -> list[TwitterUser]:
-        if int(self.rest_id) == -2: # 关注中的
-            from src.session import account
-            members = get_following(account.rest_id)
-            self.member_count = len(members)
-            return members
-        if int(self.rest_id) < 0:
-            print('本地列表不允许调用')
-            return []
+def get_list_members(rest_id) -> list[TwitterUser]:
+    ListMembers.params['variables']['listId'] = rest_id
+    ListMembers.params['variables']['count'] = 200
 
-
-        ListMembers.params['variables']['listId'] = self.rest_id
-        ListMembers.params['variables']['count'] = 200
-
-        entries = get_entries(
-            ListMembers, 
-            lambda j: j['data']['list']['members_timeline']['timeline']['instructions'][-1]['entries']
-        )
-        self.member_count = len(entries)
-        return [TwitterUser(result=entry['content']['itemContent']['user_results']['result']) for entry in entries]
-                
-            
-    def download(self):
-        if int(self.rest_id) < 0 and int(self.rest_id) != -2:
-            print('本地列表: {}, 不允许调用 "download"'.format(self.name))
-            return
-            
-        from src.utils.exception import TWRequestError, TwUserError
-        self._create()
-
-        members = self.get_members()
-        count = 0
-        
-        def progress_update(f: concurrent.futures.Future): # future callback
-            nonlocal count
-            count = count + 1
-            os.system("title {} {}/{}".format(self.name, count, self.member_count))
-            
-        futures = [] 
-        with concurrent.futures.ThreadPoolExecutor() as exc: 
-            for member in members:
-                future = exc.submit(TwitterUser.download, member, self)
-                future.add_done_callback(progress_update)
-                futures.append(future)
-        
-        from src.features import follow_user
-        for f in concurrent.futures.as_completed(futures):
-            exp = f.exception()
-            try:
-                if exp:
-                    raise exp
-            except TwUserError as err:
-                if err.reason == 'UserUnavailable':
-                    if follow_user(rest_id=err.user.rest_id):
-                        logger.info('Followed %s', err.user.title)
-                    continue
-                logger.warning(err.fmt_msg)
-            except TWRequestError as err:
-                logger.warning(err)
+    entries = get_entries(
+        ListMembers, 
+        lambda j: j['data']['list']['members_timeline']['timeline']['instructions'][-1]['entries']
+    )
+    return [TwitterUser(result=entry['content']['itemContent']['user_results']['result']) for entry in entries]      
