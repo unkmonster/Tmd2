@@ -101,7 +101,6 @@ def get_following(rest_id: str) -> list[TwitterUser]:
         Following, 
         lambda j: j['data']['user']['result']['timeline']['timeline']['instructions'][-1]['entries']
     )
-    print(F'{len(entries)=}')
 
     users = []
     unavailable = []

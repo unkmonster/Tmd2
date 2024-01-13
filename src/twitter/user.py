@@ -160,7 +160,6 @@ class TwitterUser:
         um.params['variables']['userId'] = self.rest_id
         um.params['variables']['count'] = 20
         
-        logger.debug('Getting timeline for %s', self.title)
         while True:
             um.params['variables']['cursor'] = cursor
             um.params['variables']['count'] = 200 if cursor != "" else 20
@@ -239,6 +238,7 @@ class TwitterUser:
 
     def download(self, belong_to):
         import pythoncom
+        import rich
         from src.utils.utility import timeformat
         pythoncom.CoInitialize()
 
@@ -247,7 +247,8 @@ class TwitterUser:
             entries = self.get_tweets()
             if not len(entries):
                 return
-            #print(self.prefix, len(entries))
+
+            rich.print(F"[{self.name}(@{self.screen_name})] Tweets to download: {len(entries)}")
             latest = cdownload(entries, str(self.path))
 
             #print('calc time = %dms' % int((time.time() - start) * 1000))

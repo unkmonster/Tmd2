@@ -71,13 +71,13 @@ class TwitterList:
         }
         project.listj_dir.write_text(json.dumps(listmap, ensure_ascii=False, indent=4, separators=(',', ': ')), 'utf-8')
 
+    
+    def get_members(self):
+        ListMembers.params['variables']['listId'] = self.rest_id
+        ListMembers.params['variables']['count'] = 200
 
-def get_list_members(rest_id) -> list[TwitterUser]:
-    ListMembers.params['variables']['listId'] = rest_id
-    ListMembers.params['variables']['count'] = 200
-
-    entries = get_entries(
-        ListMembers, 
-        lambda j: j['data']['list']['members_timeline']['timeline']['instructions'][-1]['entries']
-    )
-    return [TwitterUser(result=entry['content']['itemContent']['user_results']['result']) for entry in entries]      
+        entries = get_entries(
+            ListMembers, 
+            lambda j: j['data']['list']['members_timeline']['timeline']['instructions'][-1]['entries']
+        )
+        return [TwitterUser(result=entry['content']['itemContent']['user_results']['result']) for entry in entries]     

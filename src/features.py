@@ -60,30 +60,10 @@ def download_following(usr: TwitterUser):
 
 
 def download(t: TwitterList, members: list[TwitterUser]):
-    import concurrent.futures
-
     t._create()
+    index = 0
 
-    count = 0    
-    def progress_update(f: concurrent.futures.Future): # future callback
-        nonlocal count
-        count = count + 1
-        os.system("title {}/{} {}".format(count, len(members), t.name))
-
-    futures = [] 
-    with concurrent.futures.ThreadPoolExecutor() as exc: 
-        for member in members:
-            future = exc.submit(TwitterUser.download, member, t)
-            future.add_done_callback(progress_update)
-            futures.append(future)
-
-    from src.features import follow_user
-    for f in concurrent.futures.as_completed(futures):
-        exp = f.exception()
-        try:
-            if exp:
-                raise exp
-        except TwUserError as err:
-            logger.warning(err.fmt_msg)
-        except TWRequestError as err:
-            logger.warning(err)
+    for member in members:
+        index = index + 1
+        os.system("title {}/{} {}".format(index, len(members), member.name))
+        member.download(t)
