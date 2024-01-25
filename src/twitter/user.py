@@ -3,7 +3,7 @@ import os
 import time
 from datetime import datetime, timezone, timedelta
 
-from api import UserByScreenName, UserMedia
+from api import UserMedia
 from src.utils.exception import *
 from src.utilitycpp import *
 from src.utils.logger import logger
@@ -20,8 +20,7 @@ class TwitterUser:
         """ 账号不存在或账号被暂停,或受保护账号，抛出UserError
         """
         from src.utils import pattern
-        from src.utils.utility import raise_if_error, get_user_result
-        from src.session import session
+        from src.utils.utility import get_user_result
         
         if not result and not screen_name and not rest_id:
             raise TypeError
@@ -37,10 +36,10 @@ class TwitterUser:
             raise TwUserError(**result)
 
     
-        self.screen_name = result['legacy']['screen_name']
-        self.name = result['legacy']['name']
-        self.rest_id = result['rest_id']
-        self.title = f'{pattern.nonsupport.sub("", self.name)}({self.screen_name})'
+        self._screen_name = result['legacy']['screen_name']
+        self._name = result['legacy']['name']
+        self._rest_id = result['rest_id']
+        self._title = f'{pattern.nonsupport.sub("", self._name)}({self._screen_name})'
 
         
     def _create(self, belong_to):
@@ -57,7 +56,7 @@ class TwitterUser:
         lock.acquire()
         users = json.loads(project.usersj_dir.read_text('utf-8'))
         lock.release()
-        return self.rest_id in users
+        return self._rest_id in users
 
 
     # 异常安全
@@ -69,39 +68,39 @@ class TwitterUser:
         lock.acquire()
         try:
             users = json.loads(project.usersj_dir.read_text('utf-8'))
-            creater = TwitterList(rest_id=users[self.rest_id]['belong_to'][0])
+            creater = TwitterList(rest_id=users[self._rest_id]['belong_to'][0])
 
             # 更新用户名
             renamed = False
-            latest_name = users[self.rest_id]['names'][-1]
-            if self.title != latest_name:
-                if not creater.path.joinpath(latest_name).exists():
-                    creater.path.joinpath(latest_name).mkdir()
-                creater.path.joinpath(latest_name).rename(creater.path.joinpath(self.title))
-                users[self.rest_id]['names'].append(self.title)
+            latest_name = users[self._rest_id]['names'][-1]
+            if self._title != latest_name:
+                if not creater._path.joinpath(latest_name).exists():
+                    creater._path.joinpath(latest_name).mkdir()
+                creater._path.joinpath(latest_name).rename(creater._path.joinpath(self._title))
+                users[self._rest_id]['names'].append(self._title)
                 project.usersj_dir.write_text(json.dumps(users, indent=4, allow_nan=True, ensure_ascii=False), 'utf-8')
-                logger.info('Renamed {} -> {}'.format(latest_name, self.title))
+                logger.info('Renamed {} -> {}'.format(latest_name, self._title))
                 renamed = True
 
             # 检查是否需要创建快捷方式
-            if self.belong_to.rest_id not in users[self.rest_id]['belong_to']:
-                create_shortcut(creater.path.joinpath(self.title), self.belong_to.path)
-                users[self.rest_id]['belong_to'].append(self.belong_to.rest_id)
+            if self.belong_to._rest_id not in users[self._rest_id]['belong_to']:
+                create_shortcut(creater._path.joinpath(self._title), self.belong_to._path)
+                users[self._rest_id]['belong_to'].append(self.belong_to._rest_id)
                 project.usersj_dir.write_text(json.dumps(users, indent=4, allow_nan=True, ensure_ascii=False), 'utf-8')
-                logger.info('Direct {1}/{0} -> {2}/{0}'.format(self.title, self.belong_to.name, creater.name))
-            elif self.belong_to.rest_id != users[self.rest_id]['belong_to'][0] and renamed:
+                logger.info('Direct {1}/{0} -> {2}/{0}'.format(self._title, self.belong_to._name, creater._name))
+            elif self.belong_to._rest_id != users[self._rest_id]['belong_to'][0] and renamed:
                 """更改了用户名并且当前列表非首次创建者，更新快捷方式"""
                 try:
-                    self.belong_to.path.joinpath(latest_name).with_suffix('.lnk').unlink()
+                    self.belong_to._path.joinpath(latest_name).with_suffix('.lnk').unlink()
                 except FileNotFoundError as err:
                     logger.warning(err)
-                create_shortcut(creater.path.joinpath(self.title), self.belong_to.path)
+                create_shortcut(creater._path.joinpath(self._title), self.belong_to._path)
                 
 
             self.belong_to = creater
-            self.latest = users[self.rest_id]['latest']
-            self.path = self.belong_to.path.joinpath(self.title)
-            self.prefix = '{}/{}'.format(self.belong_to.name, self.title)
+            self.latest = users[self._rest_id]['latest']
+            self.path = self.belong_to._path.joinpath(self._title)
+            self.prefix = '{}/{}'.format(self.belong_to._name, self._title)
         finally:
             lock.release()
 
@@ -110,27 +109,27 @@ class TwitterUser:
     def _create_profile(self):
         self.latest = datetime.strftime(datetime.fromtimestamp(0, timezone(timedelta(hours=0))), '%a %b %d %H:%M:%S %z %Y')
         info = {
-            'names': [self.title], 
+            'names': [self._title], 
             'latest': self.latest,
             'belong_to': [
-                self.belong_to.rest_id
+                self.belong_to._rest_id
             ]
         }
 
         # 创建用户文件夹
-        path = self.belong_to.path.joinpath(self.title)
+        path = self.belong_to._path.joinpath(self._title)
         if not path.exists():
             path.mkdir()
 
         lock = rwlock.gen_wlock()
         lock.acquire()
         users = json.loads(project.usersj_dir.read_text('utf-8'))
-        users[self.rest_id] = info
+        users[self._rest_id] = info
         project.usersj_dir.write_text(json.dumps(users, indent=4, allow_nan=True, ensure_ascii=False), 'utf-8')
         lock.release()
         
         self.path = path
-        self.prefix = '{}/{}'.format(self.belong_to.name, self.title)
+        self.prefix = '{}/{}'.format(self.belong_to._name, self._title)
         logger.info('Created {}'.format(self.prefix))
 
     
@@ -157,7 +156,7 @@ class TwitterUser:
 
         tweets = []
         cursor = ""
-        um.params['variables']['userId'] = self.rest_id
+        um.params['variables']['userId'] = self._rest_id
         um.params['variables']['count'] = 20
         
         while True:
@@ -186,7 +185,7 @@ class TwitterUser:
                     if res.json()['data']['user']['result']['__typename'] == 'UserUnavailable':
                         raise TwUserError(**res.json()['data']['user']['result'])
                 except KeyError:
-                    raise TwUserError('UserUnavailable', 'unknown', screen_name= self.screen_name, rid = self.rest_id)
+                    raise TwUserError('UserUnavailable', 'unknown', screen_name= self._screen_name, rid = self._rest_id)
             
             modules = []
 
@@ -236,7 +235,7 @@ class TwitterUser:
                 tweets.append(Tweet(title, urls, legacy['created_at']))
 
 
-    def download(self, belong_to):
+    def fetch(self, belong_to):
         import pythoncom
         import rich
         from src.utils.utility import timeformat
@@ -248,7 +247,7 @@ class TwitterUser:
             if not len(entries):
                 return
 
-            rich.print(F"[{self.name}(@{self.screen_name})] Tweets to download: {len(entries)}")
+            rich.print(F"[{self._name}(@{self._screen_name})] Tweets to download: {len(entries)}")
             latest = cdownload(entries, str(self.path))
 
             #print('calc time = %dms' % int((time.time() - start) * 1000))
@@ -257,9 +256,25 @@ class TwitterUser:
                 lock.acquire()
                 try:
                     users = json.loads(project.usersj_dir.read_text('utf-8'))
-                    users[self.rest_id]['latest'] = datetime.strftime(datetime.fromtimestamp(latest, timezone(timedelta(hours=0))), timeformat)
+                    users[self._rest_id]['latest'] = datetime.strftime(datetime.fromtimestamp(latest, timezone(timedelta(hours=0))), timeformat)
                     project.usersj_dir.write_text(json.dumps(users, indent=4, allow_nan=True, ensure_ascii=False), 'utf-8')
                 finally:
                     lock.release()
         finally:
             pythoncom.CoUninitialize()
+
+
+    def follow(self) -> bool:
+        from src.features import follow_user
+        return follow_user(self._rest_id)
+    
+
+    def destory(self) -> bool:
+        from features import destory_user
+        destory_user(self._rest_id)
+        return True
+    
+
+    def get_following(self):
+        from src.features import get_following
+        return get_following(self._rest_id)

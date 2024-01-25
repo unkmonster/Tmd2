@@ -4,7 +4,7 @@ sys.path.append(os.getcwd())
 
 from src.twitter.user import TwitterUser
 
-
-usr = TwitterUser("XiaoGuai78666")
-print(usr.rest_id)
-print(usr.name)
+if __name__ == '__main__':
+    usr = TwitterUser(screen_name=sys.argv[1])
+    print(usr._rest_id)
+    print(usr._name)

@@ -12,7 +12,6 @@ class Project:
     listj_dir = root_dir.joinpath('list.json')
     
 
-
 @dataclass
 class Config:
     cookie: str

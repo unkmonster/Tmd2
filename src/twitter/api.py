@@ -275,3 +275,9 @@ class Following:
             "responsive_web_enhance_cards_enabled":False
         }
     }
+
+
+class Destory:
+    api = 'https://twitter.com/i/api/1.1/friendships/destroy.json'
+    def __init__(self) -> None:
+        self.data = "include_profile_interstitial_type=1&include_blocking=1&include_blocked_by=1&include_followed_by=1&include_want_retweets=1&include_mute_edge=1&include_can_dm=1&include_can_media_tag=1&include_ext_has_nft_avatar=1&include_ext_is_blue_verified=1&include_ext_verified_type=1&include_ext_profile_image_shape=1&skip_status=1&user_id={}"
