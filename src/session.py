@@ -1,4 +1,7 @@
 import requests
+import rich
+import os
+
 from urllib3.util import Retry
 from requests.adapters import HTTPAdapter
 from src.settings import *
@@ -35,20 +38,18 @@ class Account:
 
         r = session.get(Settings.api, timeout=10)
         raise_if_error(r)
+
         return cls(session, r.json()['screen_name'], cookie['twid'][4:]) # u%3d
 
 
-def add_cookie(cookie: str) -> bool:
-    if cookie not in config.cookies:
-        config.cookies.append(cookie)
-        with project.cookie_dir.open('w') as f:
-            for ck in config.cookies:
-                f.write(ck + '\n')
-        return True
-    print('cookie 已存在')
-    return False
+while True:
+    try:
+        account = Account.login(config.cookie)
+        break
+    except Exception as error:
+        rich.print(str(error))
+        os.remove(project.cookie_dir)
+        config = Config.load(project)
 
-
-account = Account.login(config.cookies[0])
 session = account.session
-print('已登录:', account.screen_name)
+rich.print('已登录:', account.screen_name)

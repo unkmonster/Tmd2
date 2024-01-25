@@ -15,7 +15,7 @@ class Project:
 
 @dataclass
 class Config:
-    cookies: list[str]
+    cookie: str
     authorization: str
 
     store_dir: Path
@@ -35,26 +35,24 @@ class Config:
         while True:
             try:
                 _config: dict = json.loads(pj.conf_dir.read_text())
+                break
             except FileNotFoundError:
                 template = {"authorization": "", "store_dir": ""}
                 data = json.dumps(template, indent=4, allow_nan=True, ensure_ascii=False)
                 pj.conf_dir.write_text(data)
-                print('请填写配置后保存')
+                print('填写配置并保存')
                 os.system("notepad {}".format(str(pj.conf_dir)))
                 pass
-            else:
-                break
-        
+         
         while True:
             try:
                 _cookie = pj.cookie_dir.read_text().strip()
-                _cookie = [c for c in _cookie.split('\n')]
+                break
             except FileNotFoundError:
                 pj.cookie_dir.open('w')
-                print('请填写 Cookie 后保存（换行分隔）')
+                print('填写 Cookie 并保存')
                 os.system("notepad {}".format(str(pj.cookie_dir)))
-            else:
-                break
+                
         
         return cls(
             _cookie,
