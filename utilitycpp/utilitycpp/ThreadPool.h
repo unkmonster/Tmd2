@@ -1,9 +1,6 @@
 #pragma once
 
-#include <thread>
-#include <atomic>
-#include <functional>
-#include <future>
+#include <spdlog/spdlog.h>
 
 #include "TSQueue.h"
 
@@ -39,6 +36,7 @@ public:
 			if (x.joinable())
 				x.join();
 		}
+		spdlog::debug("shutdown");
 	}
 
 	template<typename Func, typename... Args>

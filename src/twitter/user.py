@@ -157,7 +157,6 @@ class TwitterUser:
         tweets = []
         cursor = ""
         um.params['variables']['userId'] = self._rest_id
-        um.params['variables']['count'] = 20
         
         while True:
             um.params['variables']['cursor'] = cursor
@@ -177,8 +176,7 @@ class TwitterUser:
                     res.raise_for_status()
                     raise_if_error(res)
                 else:
-                    logger.error(res.text)
-                    os._exit(1)
+                    raise
 
             if not len(tweets):
                 try:
@@ -246,8 +244,7 @@ class TwitterUser:
             entries = self.get_tweets()
             if not len(entries):
                 return
-
-            rich.print(F"[{self._name}(@{self._screen_name})] Tweets to download: {len(entries)}")
+            rich.print(F"[{self._name}(@{self._screen_name}) {len(entries)}]")
             latest = cdownload(entries, str(self.path))
 
             #print('calc time = %dms' % int((time.time() - start) * 1000))
@@ -278,3 +275,11 @@ class TwitterUser:
     def get_following(self):
         from src.features import get_following
         return get_following(self._rest_id)
+    
+
+    def __eq__(self, __value: object) -> bool:
+        return self._rest_id == __value._rest_id
+
+
+    def __hash__(self) -> int:
+        return int(self._rest_id)

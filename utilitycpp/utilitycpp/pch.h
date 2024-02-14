@@ -12,18 +12,17 @@
 #include "framework.h"
 
 #include <iostream>
-
 #include <thread>
 #include <chrono>
 #include <future>
 #include <mutex>
 #include <atomic>
-
 #include <vector>
+#include <filesystem>
+#include <functional>
+#include <memory>
 
 #include <dbg.h>
-
-#include <filesystem>
 
 using namespace std::chrono_literals;
 #endif //PCH_H

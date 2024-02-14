@@ -43,10 +43,11 @@ class Account:
 
 
 while True:
+    from src.utils.exception import TWRequestError
     try:
         account = Account.login(config.cookie)
         break
-    except Exception as error:
+    except TWRequestError as error:
         rich.print(str(error))
         os.remove(project.cookie_dir)
         config = Config.load(project)

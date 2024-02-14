@@ -20,7 +20,7 @@ class TwitterList:
         if rest_id:
             self._rest_id = str(rest_id)
         
-        if name == None:
+        while name == None:
             # 非 Twitter 列表
             if rest_id and int(rest_id) < 0:
                 listmap = json.loads(project.listj_dir.read_text('utf-8'))
@@ -33,8 +33,11 @@ class TwitterList:
                 res = session.get(ListByRestId.api, params=params)
                 raise_if_error(res)
                 list = res.json()['data']['list']
-            name = list['name']
-        
+                try:
+                    name = list['name']
+                except KeyError:
+                    rest_id = -1    # 作为本地列表处理
+             
         if not rest_id:
             self._rest_id = list['id_str']
         self._name = name

@@ -7,6 +7,8 @@ from src.utils.logger import logger
 from src.utils.exception import *
 from src.utils.utility import *
 
+import concurrent.futures
+
 
 def download_user(screen_name: str, save_to = ".OTHER", listid = -1):
     local = TwitterList(rest_id=listid, name=save_to)
@@ -34,20 +36,16 @@ def follow_user(rest_id) -> bool:
  
     
 def user_to_list(user_id: str, list_id: str) -> bool:
-        ListAddMember.params['variables']['listId'] = list_id
-        ListAddMember.params['variables']['userId'] = user_id
-        try:
-            res = session.post(ListAddMember.api, json=ListAddMember.params)
-            raise_if_error(res)
-        except TWRequestError as err:
-            logger.warning(err)
-            return False
-        return True
+    ListAddMember.params['variables']['listId'] = list_id
+    ListAddMember.params['variables']['userId'] = user_id
+    res = session.post(ListAddMember.api, json=ListAddMember.params)
+    raise_if_error(res)
+    return True
 
 
 def download_following(usr: TwitterUser, exclude: list[TwitterUser] = []):
     tl = TwitterList(rest_id= '-' + usr._rest_id, name= 'Following of ' + usr._screen_name)
-    download(tl, usr.get_following(), exclude)
+    download2(tl, usr.get_following(), exclude)
 
 
 def download(owner: TwitterList, members: list[TwitterUser], exclude: list[TwitterUser] = []):
@@ -56,11 +54,30 @@ def download(owner: TwitterList, members: list[TwitterUser], exclude: list[Twitt
     members = set(members).difference(exclude)
     
     for member in members:
-        if exclude and member in exclude:
-            continue
         index = index + 1
         os.system("title {}/{} {}".format(index, len(members), member._name))
         member.fetch(owner)
+
+
+def download2(owner: TwitterList, members: list[TwitterUser], exclude: list[TwitterUser] = []):
+    owner._create()
+    index = 0
+    members = set(members).difference(exclude)
+
+    with concurrent.futures.ThreadPoolExecutor(os.cpu_count() * 3) as executor:
+        future_to_user = {executor.submit(TwitterUser.fetch, member, owner): member for member in members}
+        for future in concurrent.futures.as_completed(future_to_user):
+            user = future_to_user[future]
+            try:
+                future.result()
+            except TwUserError as err:
+                logger.warning('%r generated an exception: %s' % (user._title, err))
+            except Exception as exc:
+                logger.error(exc)
+                executor.shutdown(cancel_futures=True)
+                raise
+            index = index + 1
+            os.system('"title {}/{} {}"'.format(index, len(members), owner._name))
 
 
 def destory_user(rest_id: str) -> str:
