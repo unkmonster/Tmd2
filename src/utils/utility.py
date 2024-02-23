@@ -129,7 +129,7 @@ def get_user_result(**kwd):
     res = session.get(api.api, json=api.params)
     raise_if_error(res)
 
-    if 'user' in res.json()['data']:
+    try:
         return res.json()['data']['user']['result']
-    else:
+    except:
         raise TWRequestError(param[1], "Account doesn't exist")

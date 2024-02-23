@@ -57,9 +57,9 @@ class TwitterList:
 
     def _update(self):
         listmap = json.loads(project.listj_dir.read_text('utf-8'))
+        if not config.store_dir.joinpath(listmap[self._rest_id]['names'][-1]).exists():
+            config.store_dir.joinpath(listmap[self._rest_id]['names'][-1]).mkdir()
         if self._name != listmap[self._rest_id]['names'][-1]:
-            if not config.store_dir.joinpath(listmap[self._rest_id]['names'][-1]).exists():
-                config.store_dir.joinpath(listmap[self._rest_id]['names'][-1]).mkdir()
             config.store_dir.joinpath(listmap[self._rest_id]['names'][-1]).rename(self._path)
             listmap[self._rest_id]["names"].append(self._name)
             project.listj_dir.write_text(json.dumps(listmap, ensure_ascii=False, indent=4, separators=(',', ': ')), 'utf-8')

@@ -1,6 +1,6 @@
 __pycache__
 .vscode
-tests/main.py
 task.bat
 Tmd2.lnk
 .venv
+examples/main.py

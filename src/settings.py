@@ -1,6 +1,9 @@
 from dataclasses import dataclass
 from pathlib import Path
 import os
+from rich import console
+
+console = console.Console()
 
 @dataclass
 class Project:
@@ -36,30 +39,42 @@ class Config:
                 _config: dict = json.loads(pj.conf_dir.read_text())
                 break
             except FileNotFoundError:
-                template = {"authorization": "", "store_dir": ""}
-                data = json.dumps(template, indent=4, allow_nan=True, ensure_ascii=False)
-                pj.conf_dir.write_text(data)
-                print('填写配置并保存')
-                os.system("notepad {}".format(str(pj.conf_dir)))
-                pass
-         
-        while True:
-            try:
-                _cookie = pj.cookie_dir.read_text().strip()
-                break
-            except FileNotFoundError:
-                pj.cookie_dir.open('w')
-                print('填写 Cookie 并保存')
-                os.system("notepad {}".format(str(pj.cookie_dir)))
+                template = {"authorization": "", "store_dir": "", "cookie": ""}
                 
+                console.print('Authorization: ', end='', style='slate_blue3')
+                template['authorization'] = input().strip()
+                console.print('Cookie: ', end='', style='slate_blue3')
+                template['cookie'] = input().strip()
+                console.print('存储目录: ', end='', style='slate_blue3')
+                template['store_dir'] = input().strip()
+                
+                data = json.dumps(template, indent=4, ensure_ascii=False)
+                pj.conf_dir.write_text(data)
+            except json.decoder.JSONDecodeError as err:
+                console.print(err)
+                console.print('无法解析配置，请重新填写', style='red')
+                pj.conf_dir.unlink()
+         
+        # while True:
+        #     try:
+        #         _cookie = pj.cookie_dir.read_text().strip()
+        #         break
+        #     except FileNotFoundError:
+        #         pj.cookie_dir.open('w')
+        #         print('填写 Cookie 并保存')
+        #         os.system("notepad {}".format(str(pj.cookie_dir)))
         
+        store_path = Path(_config['store_dir'])
+        if not store_path.exists():
+            store_path.mkdir(parents=True)
+            
         return cls(
-            _cookie,
+            _config['cookie'],
             _config['authorization'],
-            Path(_config['store_dir'])
+            store_path
         )
 
 
 project = Project()
 config = Config.load(project)
-print('配置已加载')
+console.print('Config has been loaded', style='green')

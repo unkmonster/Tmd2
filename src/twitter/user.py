@@ -17,7 +17,7 @@ rwlock =  rwlock.RWLockFair()
 
 class TwitterUser:
     def __init__(self, result =None, screen_name = None, rest_id = None) -> None:
-        """ 账号不存在或账号被暂停,或受保护账号，抛出UserError
+        """ 账号不存在或账号被暂停,或受保护账号，抛出UserError,
         """
         from src.utils import pattern
         from src.utils.utility import get_user_result
@@ -40,6 +40,8 @@ class TwitterUser:
         self._name = result['legacy']['name']
         self._rest_id = result['rest_id']
         self._title = f'{pattern.nonsupport.sub("", self._name)}({self._screen_name})'
+        self._following = result['legacy'].get('following', False)
+        self._requested_following = result['legacy'].get('follow_request_sent', False)
 
         
     def _create(self, belong_to):
@@ -59,24 +61,26 @@ class TwitterUser:
         return self._rest_id in users
 
 
-    # 异常安全
     def _update(self):
-        from src.utils.utility import raise_if_error, create_shortcut
+        from src.utils.utility import create_shortcut
         from src.twitter.list import TwitterList
+        
         lock = rwlock.gen_wlock()
-
         lock.acquire()
         try:
             users = json.loads(project.usersj_dir.read_text('utf-8'))
-            creater = TwitterList(rest_id=users[self._rest_id]['belong_to'][0])
+            creator = TwitterList(rest_id=users[self._rest_id]['belong_to'][0])
+            creator._create()
 
+            # 如用户文件夹被删除，重新创建
+            latest_name = users[self._rest_id]['names'][-1]
+            if not creator._path.joinpath(latest_name).exists():
+                creator._path.joinpath(latest_name).mkdir()
+            
             # 更新用户名
             renamed = False
-            latest_name = users[self._rest_id]['names'][-1]
-            if self._title != latest_name:
-                if not creater._path.joinpath(latest_name).exists():
-                    creater._path.joinpath(latest_name).mkdir()
-                creater._path.joinpath(latest_name).rename(creater._path.joinpath(self._title))
+            if self._title != latest_name:   
+                creator._path.joinpath(latest_name).rename(creator._path.joinpath(self._title))
                 users[self._rest_id]['names'].append(self._title)
                 project.usersj_dir.write_text(json.dumps(users, indent=4, allow_nan=True, ensure_ascii=False), 'utf-8')
                 logger.info('Renamed {} -> {}'.format(latest_name, self._title))
@@ -84,20 +88,20 @@ class TwitterUser:
 
             # 检查是否需要创建快捷方式
             if self.belong_to._rest_id not in users[self._rest_id]['belong_to']:
-                create_shortcut(creater._path.joinpath(self._title), self.belong_to._path)
+                create_shortcut(creator._path.joinpath(self._title), self.belong_to._path)
                 users[self._rest_id]['belong_to'].append(self.belong_to._rest_id)
                 project.usersj_dir.write_text(json.dumps(users, indent=4, allow_nan=True, ensure_ascii=False), 'utf-8')
-                logger.info('Direct {1}/{0} -> {2}/{0}'.format(self._title, self.belong_to._name, creater._name))
+                logger.info('Direct {1}/{0} -> {2}/{0}'.format(self._title, self.belong_to._name, creator._name))
             elif self.belong_to._rest_id != users[self._rest_id]['belong_to'][0] and renamed:
                 """更改了用户名并且当前列表非首次创建者，更新快捷方式"""
                 try:
                     self.belong_to._path.joinpath(latest_name).with_suffix('.lnk').unlink()
                 except FileNotFoundError as err:
                     logger.warning(err)
-                create_shortcut(creater._path.joinpath(self._title), self.belong_to._path)
+                create_shortcut(creator._path.joinpath(self._title), self.belong_to._path)
                 
 
-            self.belong_to = creater
+            self.belong_to = creator
             self.latest = users[self._rest_id]['latest']
             self.path = self.belong_to._path.joinpath(self._title)
             self.prefix = '{}/{}'.format(self.belong_to._name, self._title)
@@ -105,7 +109,6 @@ class TwitterUser:
             lock.release()
 
 
-    # 异常安全
     def _create_profile(self):
         self.latest = datetime.strftime(datetime.fromtimestamp(0, timezone(timedelta(hours=0))), '%a %b %d %H:%M:%S %z %Y')
         info = {
@@ -262,6 +265,8 @@ class TwitterUser:
 
 
     def follow(self) -> bool:
+        if self._following == True or self._requested_following == True:
+            return True
         from src.features import follow_user
         return follow_user(self._rest_id)
     

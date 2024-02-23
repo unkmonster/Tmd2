@@ -53,4 +53,4 @@ while True:
         config = Config.load(project)
 
 session = account.session
-rich.print('已登录:', account.screen_name)
+rich.print(F"Login successfully: '@{account.screen_name}'")

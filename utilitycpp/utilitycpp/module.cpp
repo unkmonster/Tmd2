@@ -106,7 +106,7 @@ std::time_t download(const std::vector<Tweet>& tweets, const std::string& user_p
 	};
 
 	auto cpuCount = std::thread::hardware_concurrency();
-	ThreadPool tp(cpuCount? tweets.size(): std::min<std::size_t>(cpuCount, tweets.size()));
+	ThreadPool tp(!cpuCount? tweets.size(): std::min<std::size_t>(cpuCount * 2, tweets.size()));
 	
 	std::vector<std::future<std::time_t>> results;
 	for (const auto& x : tweets) {

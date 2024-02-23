@@ -7,6 +7,7 @@ class TWRequestError(RuntimeError):
 
 class TwUserError(RuntimeError):
     def __init__(self, reason, message, **kwds) -> None:
+        super().__init__(message)
         self.reason = reason
         self.message = message
         self.user = kwds
